@@ -1,0 +1,49 @@
+share some general feedback from Project 1:
+
+1. Be specific with the research question (and the purpose of your program): Predict readmissions at the point of discharge, with readmissions being defined as those occurring at the same hospital within 30 days from discharge. 
+2. Ensure your dataset does not contain uninformative features such as patient_id or admission_id.
+3. Do not assign the same variable name to different variables.
+4. It is necessary to scale the features when using logistic regression with regularization (lasso, ridge, or elastic net).
+5. Explain why you think the weights were important. Not many people provided an explanation! Since "1" (readmission) is the minority class and we want to capture readmissions, we give more weight to the minority class. This is done by giving more weight to the errors made when predicting readmission.
+6. When using GridSearchCV, we must use a pipeline that first scales the data and then trains the model. The reason we must use a pipeline is to create all the training and test sets for every cross-validation round without data leakage. See the Python code below:
+
+{Python}
+# Import the pipeline function
+from sklearn.pipeline import Pipeline
+
+# Import grid search cross validation function
+from sklearn.model_selection import GridSearchCV
+
+# Define the standard scaler
+standard_scaler_LR = StandardScaler()
+
+# Define the logisitc regression model with Elastic Net reguralisation
+Log_Reg_Elastic = LogisticRegression(penalty = 'elasticnet', solver = 'saga', max_iter=500, random_state=30)
+
+# Define the pipeline that contains the 1. Scaler to scale the features, 2. The model (Logistic Regression)
+pipe_line_LR = Pipeline([('Scaler', standard_scaler_LR), ('Log_Regression', Log_Reg_Elastic)])
+
+# Define the grid of hyperparameters
+
+# Explain why you think the weights were important. 
+# Since "1" (readmission) is the minority class and we want to capture readmissions, 
+# we give more weight to the minority class. 
+# This is done by giving more weight to the errors made when predicting readmission.
+
+param_grid_LR = {'Log_Regression__C': [10, 100],
+                 'Log_Regression__class_weight': [{0: 0.2, 1: 0.8}, {0: 0.3, 1: 0.7}],
+                 'Log_Regression__l1_ratio': [0.25, 0.5, 0.75]}
+# Define the grid search with 3 fold cross validation and f1 scoring
+grid_search_LR = GridSearchCV(pipe_line_LR, param_grid_LR, cv=3, scoring='f1', n_jobs=-1)
+
+
+# Scale and train the model using GridSearchCV
+grid_search_LR.fit(X_train, y_train.ravel())
+
+
+1. Do not ignore warnings that indicate something is not working properly in your code. Either fix the issue or at least investigate and acknowledge what the warning is telling you.
+2. Evaluate the model: evaluation should be carried out on the training and test sets (and validation set, if you have one). Include both classification reports (that include precision, recall, F1 score, and accuracy) and the confusion matrix.
+
+Per my previous message, due to some unforeseen circumstances, I need a few extra days to finish the marking. My most sincere apologies for this delay. I am working to publish the results as soon as possible.
+
+Warm regards,

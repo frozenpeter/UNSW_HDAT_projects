@@ -1,0 +1,110 @@
+# Step 1: Load pt_icu_outcome（61533 rows） as the base dataset 
+base_data <- pt_icu_outcome_tbl
+
+# Step 2: Remove duplicates for icustay_id (keeping the first row for icustay_id = 229922)
+base_data <- base_data[!duplicated(base_data, by = "icustay_id")]
+
+# Step 3: Filter by Age (18 ≤ age ≤ 89)
+# Use age_years directly; exclude rows where age_years == 0 (over 89)
+base_data <- base_data[age_years >= 18 & age_years <= 89]
+
+# Step 5: Save the filtered dataset
+filtered_data <- base_data  # Rename for clarity in further processing
+saveRDS(filtered_data, file.path(output_path, "filtered_data.rds"))
+
+
+# Step 6: Merge with Patients (46520 rows), Admissions(58976 rows), and ICU Stays(61532 rows)
+
+
+6.1 admissions_tbl has key 'subject_id' and 'hadm_id', it has inportant variables (all of them has no missing except 'deathtime'):
+'insurance', 'language', 'religion', 'marital_status', 'ethnicity', 
+'admission_type', 'admission_location'
+
+ADMISSION_TYPE
+ADMISSION_TYPE describes the type of the admission: ‘ELECTIVE’, ‘URGENT’, ‘NEWBORN’ or ‘EMERGENCY’. Emergency/urgent indicate unplanned medical care, and are often collapsed into a single category in studies. Elective indicates a previously planned hospital admission. Newborn indicates that the HADM_ID pertains to the patient’s birth.
+ADMISSION_LOCATION
+ADMISSION_LOCATION provides information about the previous location of the patient prior to arriving at the hospital. There are 9 possible values:
+•	EMERGENCY ROOM ADMIT
+•	TRANSFER FROM HOSP/EXTRAM
+•	TRANSFER FROM OTHER HEALT
+•	CLINIC REFERRAL/PREMATURE
+•	** INFO NOT AVAILABLE **
+•	TRANSFER FROM SKILLED NUR
+•	TRSF WITHIN THIS FACILITY
+•	HMO REFERRAL/SICK
+•	PHYS REFERRAL/NORMAL DELI
+
+hospital_expire_flag might be able to confirm/double check with expire_flag in pt_icu_outcome_tbl 
+
+admittime, dischtime, deathtime (~90% missing)
+ADMITTIME provides the date and time the patient was admitted to the hospital, while DISCHTIME provides the date and time the patient was discharged from the hospital. If applicable, DEATHTIME provides the time of in-hospital death for the patient. Note that DEATHTIME is only present if the patient died in-hospital, and is almost always the same as the patient’s DISCHTIME. However, there can be some discrepancies due to typographical errors.
+
+6.2 icustays_tbl has key 'subject_id', 'hadm_id' and 'icustay_id'
+inportant variables (all of them has no missing):
+first_careunit, last_careunit
+FIRST_CAREUNIT and LAST_CAREUNIT contain, respectively, the first and last ICU type in which the patient was cared for. As an ICUSTAY_ID groups all ICU admissions within 24 hours of each other, it is possible for a patient to be transferred from one type of ICU to another and have the same ICUSTAY_ID.
+
+Care units are derived from the TRANSFERS table, and definition for the abbreviations can be found in the documentation for TRANSFERS.
+
+Care unit	Description
+CCU	Coronary care unit
+CSRU	Cardiac surgery recovery unit
+MICU	Medical intensive care unit
+NICU	Neonatal intensive care unit
+NWARD	Neonatal ward
+SICU	Surgical intensive care unit
+TSICU	Trauma/surgical intensive care unit
+
+
+first_wardid, last_wardid
+FIRST_WARDID and LAST_WARDID contain the first and last ICU unit in which the patient stayed. Note the grouping of physical locations in the hospital database is referred to as ward. Though in practice ICUs are not referred to as wards, the hospital database technically tracks ICUs as “wards with an ICU cost center”. As a result, each ICU is associated with a WARDID.
+
+These can be found using the following SQL query select icustay_id from mimiciii.icustays where first_wardid != last_wardid. If you wish to know the time and direction of the change the transfers table contains this information. It also identifies the tyoe of ICU (e.g. allowing subsetting to cardiac ICU patients).
+
+
+
+6.3 patients_tbl has key 'subject_id' 
+inportant variables (all of them has no missing): 'gender' 
+
+patients_tbl also has 'dob' and 'expire_flag' might be able to confirm/double check with 'dob' and 'expire_flag'  in pt_icu_outcome_tbl 
+
+6.4 icd9_diag (not load before)
+has key 'subject_id' and 'hadm_id' 
+inportant variables (all of them has no missing): 'icd9_code' 
+
+
+6.5 pt_weight (not load before)
+has key 'icustay_id'
+inportant variables (5.11% missing): 'avg_weight_naive' 
+
+6.6 bloodculture (not load before)
+has key 'hadm_id'
+inportant variables: 'org_name', 'positiveculture' , 'ab_name' , 'antibioticresistance' 
+
+
+
+# Step 7: Add Weekend Admission Flag
+# Ensure correct locale for weekday names
+Sys.setlocale("LC_TIME", "C")
+# Add 'intime_weekdays' column to identify the day of the week
+filtered_data[, intime_weekdays := weekdays(as.Date(intime))]
+# Add 'is_weekend_admission' flag based on 'intime_weekdays'
+filtered_data[, is_weekend_admission := intime_weekdays %in% c("Saturday", "Sunday")]
+# Validation: Display the first 10 rows to confirm correct flagging
+#cat("\nFirst 10 rows of 'filtered_data' with 'is_weekend_admission':\n")
+#print(filtered_data[1:10, .(intime, intime_weekdays, is_weekend_admission)])
+# Save updated filtered data with weekend admission flag
+saveRDS(filtered_data, file.path(output_path, "filtered_data_with_weekend_flag.rds"))
+
+
+
+
+
+# Step 8: Retain the First ICU Admission per Patient
+setorder(base_data, subject_id, admittime)
+filtered_data <- base_data[, .SD[1], by = subject_id]
+
+
+# Save filtered_data after initial filtering
+saveRDS(filtered_data, file.path(output_path, "filtered_data_step5.rds"))
+cat("Filtered data saved at Step 5 with", nrow(filtered_data), "rows and", ncol(filtered_data), "columns.\n")

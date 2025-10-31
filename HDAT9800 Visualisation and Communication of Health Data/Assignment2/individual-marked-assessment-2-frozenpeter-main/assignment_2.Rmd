@@ -1,0 +1,509 @@
+---
+title: "assignment_2"
+author: "Zhenyu_Zhang(z5037788)"
+date: "2024-07-17"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+### Introduction
+The dataset used in this assignment is a retrospective heart failure dataset using electronic health data collected from patients who were admitted to Zigong Fourth People’s Hospital in Sichuan, China between December 2016 and June 2019. The dataset includes 168 variables for 2,008 patients with heart failure.
+Data on subsequent hospital admissions and mortality were obtained at a mandatory follow‐up visit at 28 days, 3 months and 6 months (if the patient was unable to reach the clinical centre, the follow‐up visit was replaced by a telephone call).
+
+Heart failure was defined according to the European Society of Cardiology (ESC) criteria:
+- The presence of symptoms and/or signs of heart failure. Typical symptoms include breathlessness, orthopnea, paroxysmal nocturnal dyspnea, reduced excises  tolerance, Fatigue, tiredness, increased time to recover after exercise and Ankle swelling. Typical signs include elevated jugular venous pressure, hepatojugular reflux, third heart sound (gallop rhythm) and laterally displaced apical impulse.
+- Elevated levels of BNPs (BNP >35 pg/mL and/or NT‐proBNP >125 pg/mL)
+- Objective evidence of other cardiac functional and structural alterations underlying heart failure.
+- In case of uncertainty, a stress test or invasively measured elevated LV filling pressure may be needed to confirm the diagnosis.
+---
+
+```{r libraries, include=FALSE, echo=FALSE}
+library(readr)
+library(janitor)
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggridges)
+library(tidyr)
+library(patchwork)
+```
+
+
+```{r Step 1_e, include=FALSE, echo=FALSE}
+# Load the data
+dataset <- readr::read_csv("../zigong/dat.csv")
+dataset_md <- readr::read_csv("../zigong/dat_md.csv")
+data_dictionary <- readr::read_csv("../zigong/dataDictionary.csv")
+
+# Display the first few rows of each dataset to verify loading
+#head(dataset)
+#head(dataset_md)
+#head(data_dictionary)
+
+# Get a summary of the dataset
+#summary(dataset)
+
+```
+
+
+```{r step 1_f_a, echo=FALSE, results="hide"}
+# Clean column names
+dataset_cn <- dataset %>% janitor::clean_names()
+
+# Check the cleaned column names
+colnames(dataset_cn)
+
+# Retrieve the full column specification
+spec(dataset_cn)
+```
+
+```{r step 1_f_b1, echo=FALSE, results="hide"}
+# Get labels of age_cat
+unique(dataset_cn$age_cat) # match the number of unique intervals in mutate() with the correct number of labels
+```
+
+```{r step 1_f_b2, echo=FALSE, results="hide"}
+# Convert relevant columns to factors
+dataset_cf <- dataset_cn %>%
+  mutate(
+    gender = as.factor(gender),
+    destination_discharge = as.factor(destination_discharge),
+    admission_ward = as.factor(admission_ward),
+    admission_way = as.factor(admission_way),
+    occupation = as.factor(occupation),
+    discharge_department = as.factor(discharge_department),
+    type_of_heart_failure = as.factor(type_of_heart_failure),
+    nyha_cardiac_function_classification = as.factor(nyha_cardiac_function_classification),
+    killip_grade = as.factor(killip_grade),
+    type_ii_respiratory_failure = as.factor(type_ii_respiratory_failure),
+    consciousness = as.factor(consciousness),
+    respiratory_support = as.factor(respiratory_support),
+    oxygen_inhalation = as.factor(oxygen_inhalation),
+    outcome_during_hospitalization = as.factor(outcome_during_hospitalization),
+    age_cat = factor(age_cat, labels = c("21-29", "29-39", "39-49", "49-59", "59-69", "69-79", "79-89", "89-110"))
+  )
+
+# Display structure to verify changes
+str(dataset_cf) # Check until no chr; if has chr added into mutate()
+
+```
+```{r Filter, echo=FALSE, results="hide"}
+# Filter dataset to remove unrealistic height and weight values
+dataset_cleaned <- dataset_cf %>%
+  filter(weight >= 30 & weight < 200, height >= 1.2 & height < 2.2)
+
+# Convert all columns to character type for missing data check
+dataset_for_missing <- dataset_cleaned %>%
+  mutate(across(everything(), as.character))
+
+# Identify and count missing data in the cleaned dataset
+missing_data_summary <- dataset_for_missing %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  filter(is.na(Value)) %>%
+  group_by(Variable) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count))
+
+# Display the summary of missing data
+if (nrow(missing_data_summary) == 0) {
+  cat("There is no missing data in the dataset.")
+} else {
+  kable(missing_data_summary, col.names = c("Variable", "Number of Missing Values"), caption = "Summary of Missing Data")
+}
+```
+
+
+
+```{r age_gender2, echo=FALSE, fig.height=8, fig.width=11}
+# Calculate percentages
+dataset_age_gender <- dataset_cleaned %>%
+  group_by(age_cat, gender) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  mutate(percentage = count / sum(count)*100)
+
+
+# Plot histogram with percentages and adjusted colors
+ggplot(dataset_age_gender, aes(x = count, y = age_cat, fill = gender)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Age and Gender Distribution", x = "Count Number", y = "Age Group", fill = "Gender") +   # Option Logarithmic y-axis: scale_y_log10()  
+  scale_fill_manual(values = c("Male" = "lightblue", "Female" = "pink"),
+                                        breaks = c("Male", "Female"))+ # Control legend order
+  geom_text(aes(label = paste0(round(percentage, 2), "%")), 
+            position = position_dodge(width = 0.9), vjust = 0.5, hjust = -0.1, size = 3.3) + # Adjust the size as needed
+  scale_y_discrete(limits = rev(levels(dataset_age_gender$age_cat))) + # Reverse the order of age groups
+  xlim(0, 450) + # Set x-axis limits to ensure all labels are shown
+  theme_minimal()
+
+```
+
+---
+
+```{r weight_distribution, echo=FALSE, fig.height=8, fig.width=11}
+# Plot weight distribution with auxiliary lines for male and female
+ggplot(dataset_cleaned, aes(x = weight, fill = gender)) +
+  geom_density(alpha = 0.5) + # draws kernel density estimate
+  geom_vline(data = dataset_cleaned %>% group_by(gender) %>% summarise(mean_weight = mean(weight)), aes(xintercept = mean_weight, color = gender), linetype = "dashed", linewidth = 1) + # Reference lines 
+  labs(title = "Weight Distribution by Gender", x = "Weight (kg)", y = "Density", fill = "Gender", color = "Mean") +
+  scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue")) +
+  scale_color_manual(values = c("Female" = "red", "Male" = "blue")) +
+  theme_minimal()
+```
+
+---
+
+```{r weight_distribution_Age_Gender, echo=FALSE, fig.height=8, fig.width=11}
+# Box plot of weight by age group and gender
+ggplot(dataset_cleaned, aes(x = age_cat, y = weight, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "Weight Distribution by Age Group and Gender", x = "Age Group", y = "Weight (kg)", fill = "Gender") +
+  scale_fill_manual(values = c("Male" = "lightblue", "Female" = "pink")) +
+  theme_minimal()
+
+```
+
+
+---
+
+```{r height_distribution, echo=FALSE, fig.height=8, fig.width=11}
+# Plot height distribution with auxiliary lines for male and female
+ggplot(dataset_cleaned, aes(x = height, fill = gender)) +
+  geom_density(alpha = 0.5) + #draws kernel density estimate
+  geom_vline(data = dataset_cleaned %>% group_by(gender) %>% summarise(mean_height = mean(height)), aes(xintercept = mean_height, color = gender), linetype = "dashed", linewidth = 1) + # Reference lines 
+  labs(title = "Height Distribution by Gender", x = "Height (m)", y = "Density", fill = "Gender", color = "Mean") +
+  scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue")) +
+  scale_color_manual(values = c("Female" = "red", "Male" = "blue")) +
+  theme_minimal()
+```
+
+---
+
+```{r height_distribution_Age_Gender, echo=FALSE, fig.height=8, fig.width=11}
+# Box plot of height by age group and gender
+ggplot(dataset_cleaned, aes(x = age_cat, y = height, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "Height Distribution by Age Group and Gender", x = "Age Group", y = "Height (cm)", fill = "Gender") +
+  scale_fill_manual(values = c("Male" = "lightblue", "Female" = "pink")) +
+  theme_minimal()
+
+```
+
+
+
+
+---
+
+```{r BMI chcek, echo=FALSE, results="hide"}
+# Calculate BMI from weight and height
+dataset_cleaned <- dataset_cleaned %>%
+  mutate(calculated_bmi = weight / (height * height))
+
+# Compare calculated BMI with provided BMI
+bmi_comparison <- dataset_cleaned %>%
+  mutate(bmi_difference = abs(bmi - calculated_bmi))
+
+# Display rows with significant discrepancies
+significant_discrepancies <- bmi_comparison %>%
+  filter(bmi_difference > 0.1)  # You can adjust the threshold as needed
+
+# Print significant discrepancies
+print(significant_discrepancies)
+
+# Summary statistics of BMI differences
+summary(bmi_comparison$bmi_difference)
+
+```
+
+```{r BMI plot, echo=FALSE, fig.height=8, fig.width=11}
+# Density plot of BMI distribution by gender
+ggplot(dataset_cleaned, aes(x = bmi, fill = gender)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data = dataset_cleaned %>% group_by(gender) %>% summarise(mean_bmi = mean(bmi)), aes(xintercept = mean_bmi, color = gender), linetype = "dashed", linewidth = 1) +
+  labs(title = "BMI Distribution by Gender", x = "BMI", y = "Density", fill = "Gender", color = "Mean") +
+  scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue")) +
+  scale_color_manual(values = c("Female" = "red", "Male" = "blue")) +
+  theme_minimal()
+
+```
+
+
+---
+
+```{r BMI_distribution_Age_Gender, echo=FALSE, fig.height=8, fig.width=11}
+# Box plot of BMI distribution by age group and gender
+ggplot(dataset_cleaned, aes(x = age_cat, y = bmi, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "BMI Distribution by Age Group and Gender", x = "Age Group", y = "BMI (kg/m^2)", fill = "Gender") +
+  scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue")) +
+  theme_minimal()
+
+```
+
+
+---
+
+```{r heart_failure_types_distribution_with_age_gender, echo=FALSE, fig.height=8, fig.width=11}
+# Heart Failure Types by Age Group and Gender
+ggplot(dataset_cleaned, aes(x = age_cat, fill = gender)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~type_of_heart_failure, ncol = 1, scales = "free_y") + # ncol = 1, the subcharts will be arranged in rows; scales = "free_y" will allow the y-axis to be scaled independently for each subchart
+  labs(title = "Heart Failure Types by Age Group and Gender", x = "Age Group", y = "Count", fill = "Gender") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue"))
+
+```
+
+---
+
+```{r Blood Pressure Distribution by Age Group and Gender, echo=FALSE, fig.height=8, fig.width=11}
+# Filter out age groups 21-29 and 29-39 as low sample size makes clutter
+age_filtered_dataset <- dataset_cleaned %>%
+  filter(!age_cat %in% c("21-29", "29-39"))
+
+
+# Pivot the dataset to a long format
+long_dataset_bp <- age_filtered_dataset %>%
+  pivot_longer(cols = c(systolic_blood_pressure, diastolic_blood_pressure, map), 
+               names_to = "blood_pressure_type", values_to = "value")
+
+# Plot the combined density plots
+ggplot(long_dataset_bp, aes(x = value, color = blood_pressure_type, linetype = gender)) +
+  geom_density(aes(group = interaction(blood_pressure_type, gender, age_cat)), adjust = 1.5) +
+  facet_wrap(~age_cat, scales = "free_y") +
+  labs(title = "Blood Pressure Distribution by Age Group and Gender", 
+       x = "Blood Pressure (mmHg)", 
+       y = "Density", 
+       color = "Blood Pressure Type", 
+       linetype = "Gender") +
+  scale_color_manual(values = c("systolic_blood_pressure" = "#B76776", 
+                                "diastolic_blood_pressure" = "#2F76C0", 
+                                "map" = "#7F807F"),
+                     labels = c("systolic_blood_pressure" = "Systolic Blood Pressure", 
+                                "diastolic_blood_pressure" = "Diastolic Blood Pressure", 
+                                "map" = "Mean Arterial Pressure")) +
+  scale_linetype_manual(values = c("Female" = "solid", "Male" = "dashed")) +
+  theme_minimal()
+
+```
+
+---
+
+#### Explanation of the Construction of the Visualization
+**columns are used**：
+  - **Clinical Measurements**: `systolic_blood_pressure`, `diastolic_blood_pressure`, `map` (Mean Arterial Pressure)
+  - **Demographic Information**: `age_cat` (Age Group), `gender`
+
+**Type of Chart Employed**: Density Plot
+
+**Data Transformations**:
+  - **Filtering**: Given the small number of cases in the 21-29 and 29-39 age groups, it could lead to unreliable statistical estimates and could potentially skew the results. Thus, it might be reasonable to exclude these groups from certain analyses to focus on more substantial data and improve the clarity of visualization.
+  - **Derived Column**: `blood_pressure_type` (Created during data transformation to indicate the type of blood pressure measurement)
+
+
+---
+
+
+
+```{r LVEF and Heart Failure Type, echo=FALSE, fig.height=8, fig.width=11}
+# LVEF by Type of Heart Failure and Gender
+ggplot(dataset_cleaned, aes(x = type_of_heart_failure, y = lvef, color = gender)) +
+  geom_jitter(width = 0.2, height = 0) +
+  geom_hline(yintercept = 40, linetype = "dashed", color = "#B76776") +
+  geom_hline(yintercept = 50, linetype = "dashed", color = "#B76776") +
+  labs(title = "LVEF by Type of Heart Failure and Gender", 
+       x = "Type of Heart Failure", 
+       y = "LVEF (%)", 
+       color = "Gender") +
+  annotate("text", x = 3.4, y = 33, label = "HFrEF", color = "#403E4E", vjust = -1) +
+  annotate("text", x = 3.4, y = 43, label = "HFmrEF", color = "#403E4E", vjust = -1) +
+  annotate("text", x = 3.4, y = 53, label = "HFpEF", color = "#403E4E", vjust = -1) +
+  theme_minimal()
+
+```
+
+
+---
+
+#### Explanation of the Construction of the Visualization
+**Columns Used**:
+- **Clinical Measurements**: `lvef` (Left Ventricular Ejection Fraction)
+- **Demographic Information**: `gender` 
+- **Categorical Variables**: `type_of_heart_failure` (Type of Heart Failure)
+
+**Type of Chart Employed**: Jitter Plot
+
+**Data Transformations**:
+- **Horizontal Lines**: Added dashed lines at 40% and 50% LVEF to indicate thresholds for HFrEF, HFmrEF, and HFpEF.
+- **Annotations**: Text labels added to distinguish between heart failure types based on LVEF ranges.
+- **Color Coding**: Gender is color-coded to differentiate between male and female patients.
+
+This visualization uses a jitter plot to display the distribution of LVEF values across different types of heart failure, with each point representing an individual patient. The chart includes dashed lines and annotations to visually separate the categories of heart failure based on LVEF. 
+
+**Please Note**:Removed 1366 rows containing missing values.
+
+
+---
+
+
+```{r NYHA Classification and Heart Failure Type, echo=FALSE, fig.height=8, fig.width=11}
+# LVEF by NYHA Cardiac Function Classification and Gender
+ggplot(dataset_cleaned, aes(x = nyha_cardiac_function_classification, y = lvef, color = gender)) +
+  geom_jitter(width = 0.2, height = 0) +
+  geom_hline(yintercept = 40, linetype = "dashed", color = "#B76776") +
+  geom_hline(yintercept = 50, linetype = "dashed", color = "#B76776") +
+  labs(title = "LVEF by NYHA Cardiac Function Classification", 
+       x = "NYHA Classification", 
+       y = "LVEF (%)",
+       color = "Gender") +
+  annotate("text", x = 3.4, y = 33, label = "HFrEF", color = "#403E4E", vjust = -1) +
+  annotate("text", x = 3.4, y = 43, label = "HFmrEF", color = "#403E4E", vjust = -1) +
+  annotate("text", x = 3.4, y = 53, label = "HFpEF", color = "#403E4E", vjust = -1) +
+  theme_minimal()
+  
+
+```
+
+---
+
+#### Explanation of the Construction of the Visualization
+**Columns Used**:
+- **Clinical Measurements**: `lvef` (Left Ventricular Ejection Fraction)
+- **Demographic Information**: `gender`
+- **Categorical Variables**: `nyha_cardiac_function_classification` (NYHA Cardiac Function Classification)
+
+**Type of Chart Employed**: Jitter Plot
+
+**Data Transformations**:
+- **Horizontal Lines**: Added dashed lines at 40% and 50% LVEF to indicate thresholds for HFrEF, HFmrEF, and HFpEF.
+- **Annotations**: Text labels added to distinguish between heart failure types based on LVEF ranges.
+- **Color Coding**: Gender is color-coded to differentiate between male and female patients.
+
+This visualization uses a jitter plot to display the distribution of LVEF values across different NYHA cardiac function classifications, with each point representing an individual patient. The chart includes dashed lines and annotations to visually separate the categories of heart failure based on LVEF, providing a view of how LVEF varies by NYHA classification and gender. 
+
+**Please Note**:Removed 1366 rows containing missing values.
+
+
+---
+
+
+```{r heart_failure_types, echo=FALSE,  fig.height=8, fig.width=11}
+# Distribution of Heart Failure Types
+p1 <- ggplot(dataset_cleaned, aes(x = type_of_heart_failure, fill = gender)) +
+  geom_bar() +
+  labs(title = "Distribution of Heart Failure Types", x = "Type of Heart Failure", y = "Count", fill = "Gender") +
+  scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue")) +
+  theme_minimal() 
+
+# NYHA Classification by Type of Heart Failure
+p2 <- ggplot(dataset_cleaned, aes(x = type_of_heart_failure, fill = nyha_cardiac_function_classification)) +
+  geom_bar(position = "fill") +
+  labs(title = "NYHA Classification by Type of Heart Failure", 
+       x = "Type of Heart Failure", 
+       y = "Proportion", 
+       fill = "NYHA Classification") +
+  scale_fill_manual(values = c("II" = "#B4CDFF", "III" = "#FF9999", "IV" = "#FFCC99")) +
+  theme_minimal()
+
+# Killip Grade by Type of Heart Failure
+p3 <- ggplot(dataset_cleaned, aes(x = type_of_heart_failure, fill = killip_grade)) +
+  geom_bar(position = "fill") +
+  labs(title = "Killip Grade by Type of Heart Failure", 
+       x = "Type of Heart Failure", 
+       y = "Proportion", 
+       fill = "Killip Grade") +
+  scale_fill_manual(values = c("I" = "#B4D0C3", "II" = "#B788C7", "III" = "#CDADAB", "IV" = "#E4704F"),
+                    labels = c("I" = "Class 1", "II" = "Class 2", "III" = "Class 3", "IV" = "Class 4")) +
+  theme_minimal()
+
+# Distribution of NYHA Classification within Killip Grade by Type of Heart Failure
+p4 <- ggplot(dataset_cleaned, aes(x = type_of_heart_failure, fill = nyha_cardiac_function_classification)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~ killip_grade, labeller = as_labeller(c("I" = "Class 1", "II" = "Class 2", "III" = "Class 3", "IV" = "Class 4"))) +
+  labs(title = "Distribution of NYHA Classification within Killip Grade by Type of Heart Failure", 
+       x = "Type of Heart Failure", 
+       y = "Proportion", 
+       fill = "NYHA Classification") +
+  scale_fill_manual(values = c("II" = "#B4CDFF", "III" = "#FF9999", "IV" = "#FFCC99")) +
+  theme_minimal()
+
+
+
+(p1 | p2) / (p3 | p4) 
+
+```
+
+---
+
+#### Explanation of the Construction of the Visualization
+**Columns Used**:
+- **Clinical Measurements**: `lvef` (Left Ventricular Ejection Fraction)
+- **Demographic Information**: `gender`
+- **Categorical Variables**: `type_of_heart_failure`, `nyha_cardiac_function_classification`, `killip_grade`
+
+**Type of Charts Employed**: Bar Plots and Faceted Bar Plots
+
+**Data Transformations**:
+- **Filtering and Grouping**: Grouped the data by type of heart failure, NYHA classification, and Killip grade.
+- **Color Coding**: Different color schemes are used to distinguish between genders, NYHA classifications, and Killip grades.
+- **Faceting**: Used `facet_wrap` to create small multiples for NYHA classification within Killip grades, providing a detailed view of the distribution across these categories.
+
+This set of visualizations employs bar plots to illustrate the distribution and proportion of various clinical classifications within the dataset. The charts are color-coded for clarity and grouped by relevant categories to show the prevalence and severity(NYHA classifications) of heart failure types, as well as the Killip grades.
+
+---
+
+```{r cardiopulmonary disease, echo=FALSE, fig.height=8, fig.width=11}
+# Create a long format dataset for cardiopulmonary diseases
+long_dataset_cp <- age_filtered_dataset %>%
+  pivot_longer(cols = c(myocardial_infarction, congestive_heart_failure, peripheral_vascular_disease, cerebrovascular_disease, chronic_obstructive_pulmonary_disease, connective_tissue_disease), 
+               names_to = "cardiopulmonary_disease", values_to = "presence") %>%
+  filter(presence == 1)
+
+# Plot the stacked bar plots
+ggplot(long_dataset_cp, aes(x = type_of_heart_failure, fill = cardiopulmonary_disease)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~ age_cat) +
+  labs(title = "Distribution of Cardiopulmonary Diseases by Type of Heart Failure and Age Group", 
+       x = "Type of Heart Failure", 
+       y = "Proportion", 
+       fill = "Cardiopulmonary Disease") +
+  scale_fill_manual(values = c("myocardial_infarction" = "#FF9999", 
+                               "congestive_heart_failure" = "#B4CDFF", 
+                               "peripheral_vascular_disease" = "#FFCC99", 
+                               "cerebrovascular_disease" = "#B4D0C3", 
+                               "chronic_obstructive_pulmonary_disease" = "#B788C7", 
+                               "connective_tissue_disease" = "#E4704F"),
+                     labels = c("myocardial_infarction" = "Myocardial Infarction", 
+                                "congestive_heart_failure" = "Congestive Heart Failure", 
+                                "peripheral_vascular_disease" = "Peripheral Vascular Disease", 
+                                "cerebrovascular_disease" = "Cerebrovascular Disease", 
+                                "chronic_obstructive_pulmonary_disease" = "Chronic Obstructive Pulmonary Disease", 
+                                "connective_tissue_disease" = "Connective Tissue Disease")) +
+  theme_minimal()
+```
+
+---
+
+#### Explanation of the Construction of the Visualization
+**Columns Used**:
+- **Clinical Measurements**: `type_of_heart_failure`
+- **Demographic Information**: `age_cat` (Age Group)
+- **Categorical Variables**: `myocardial_infarction`, `congestive_heart_failure`, `peripheral_vascular_disease`, `cerebrovascular_disease`, `chronic_obstructive_pulmonary_disease`, `connective_tissue_disease`
+
+**Type of Charts Employed**: Stacked Bar Plots
+
+**Data Transformations**:
+- **Filtering**: Filter out age groups 21-29 and 29-39 as low sample size makes clutter.
+- **Derived Column**: `cardiopulmonary_disease` (Created during data transformation to indicate the presence of various cardiopulmonary diseases)
+
+This set of visualizations employs stacked bar plots to illustrate the distribution and proportion of various cardiopulmonary diseases within the dataset, grouped by type of heart failure and age category. The charts are color-coded for clarity and grouped by relevant categories to show the prevalence of cardiopulmonary diseases in different heart failure types and age groups. This helps in understanding the overall distribution and interrelationships within the dataset.
+

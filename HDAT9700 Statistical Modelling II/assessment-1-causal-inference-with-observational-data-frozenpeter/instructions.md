@@ -1,0 +1,171 @@
+HDAT9700: Assessment 1 - Chapters 1-2
+================
+Mark Hanly
+Term 3 2024
+
+### Submission instructions
+
+This is an R Markdown document, an example of *literate programming*
+which allows users to interweave text, images, statistical code, and
+analysis output from a single file.
+
+To complete your assignment:
+
+- Edit the file `submission.Rmd`, interweaving text and R code as
+  appropriate to answer the questions below. Remember to `Knit` the file
+  to make sure everything is running smoothly. Detailed information on R
+  Markdown is available
+  [here](https://rmarkdown.rstudio.com/lesson-1.html), and there is a
+  useful cheat sheet
+  [here](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf).
+
+- Use Git to `commit` changes you make in this repo locally.
+
+- `Push` the repo, together with the edited `submission.Rmd` file, the
+  corresponding `submission.md` file and any other relevant files to
+  GitHub.
+
+- Note that the output format is specified as `github_document` in the
+  chunk above and in `submission.Rmd`. The advantage of this is that
+  your submitted assessment can be viewed directly in GitHub. However,
+  if you are using an R package that produces HTML output, you can
+  change the output format to `html_document`.
+
+You can `commit` and `push` as often as necessary—your assessment will
+be graded on the most recent version of your repo at the assessment due
+date.
+
+Good luck!
+
+------------------------------------------------------------------------
+
+## Overview
+
+This assessment has two sections. In the first section you will read a
+published paper that is provided to you and prepare a DAG that reflects
+your beliefs with respect to the underlying causal research question. In
+the second section you will use the `MatchIt` package to undertake a
+matching analysis.
+
+## Section 1 (40%)
+
+This section is based on the following manuscript which you can access
+online at <https://doi.org/10.1136/bmjph-2023-000514>
+
+> Cavallaro, Francesca, et al. “Intensive home visiting for adolescent
+> mothers in the Family Nurse Partnership in England 2010–2019: a
+> population-based data linkage cohort study using propensity score
+> matching.” BMJ Public Health 2.1 (2024).
+
+This is an observational data study that aims to evaluate the effect of
+the Family Nurse Partnership, a nurse home-visiting program designed to
+improve birth outcomes and child health and development among teenage
+mothers in England. Program participation was not randomised, so the
+authors used propensity score matching to compare outcomes among
+participants to a matched sample of non-participants. Outcomes included
+healthcare use, indicators of child maltreatment, and education.
+
+### Question 1 (15 marks)
+
+Draw a Directed Acyclic Graph (DAG) that could be used to inform the
+analysis estimating the total and direct effect of program participation
+on the risk of being born low birth weight.
+
+Note that:
+
+- The DAG can be drawn using any software of your choice (e.g. with the
+  online [dagitty](https://dagitty.net/dags.html) tool, with the
+  `dagitty` or `ggdag` packages in R, or even an embedded image of a pen
+  and paper diagram)
+
+- The exposure and outcome should be clear
+
+- The DAG should be plausible but doesn’t have to include every single
+  possible relevant variable; \<10 most relevant nodes should be
+  adequate.
+
+- Not every node on the DAG needs to be measured or even measurable.
+
+### Question 2 (15 marks)
+
+Write a brief descriptive paragraph that highlights any non-causal or
+backdoor path(s) and potential variables that might be useful to close
+the path(s).
+
+### Question 3 (10 marks)
+
+Describe the distribution of the propensity score for mothers who
+participated in the program and unexposed mothers. Comment on whether
+the assumption of positivity is met with respect to the propensity
+score.
+
+## Section 2 (60%)
+
+In this section you will undertake a matching analysis using simulated
+data which has been designed to roughly emulate the Family Nurse
+Partnership evaluation from Section 1. The data is stored in the
+dataframe `fnp-data.Rda`. You can load it into your environment using
+the code
+
+``` r
+load('fnp-data.Rda')
+head(df)
+```
+
+    ##   fnp mat_age   ethnicity deprivation bweight devVuln
+    ## 1   0      20       Other           6    2919       0
+    ## 2   1      17       White           9    3643       0
+    ## 3   0      19       Other           7    3455       1
+    ## 4   0      24 South Asian           4    3061       0
+    ## 5   0      22       White           5    3045       0
+    ## 6   0      22       White           8    3044       0
+
+the following six variables are included:
+
+- **fnp** A binary indicator of participation in a Family Nurse
+  Partnership evaluation
+
+- **mat_age** Maternal age, measured in years
+
+- **ethnicity** Mother’s ethnicity
+
+- **deprivation** Area level deprivation on a scale from 1 (least
+  deprived) to 10 (most deprived)
+
+- **bweight** Birthweight, measured in grams
+
+- **devVuln** An indicator for child developmental vulnerability,
+  measured at age 5
+
+The key research question of interest is to evaluate the total effect of
+program participation on the risk of being born low birth weight
+(\<2,500g).
+
+### Question 1 (20 marks)
+
+Undertake an exploratory analysis, using tables and/or figures to
+describe the distribution and key associations in the data. Make sure to
+support each table/figure with a few lines of interpretative text.
+
+### Question 2 (10 marks)
+
+Undertake matching to evaluate the effect of program participation on
+the risk of being born low birth weight (birth weight \<2,500g).
+
+### Question 3 (10 marks)
+
+Summarise the balance in the dataset before and after matching using
+appropriate figures and/or tables. Make sure to include a few lines of
+text commenting on what you find.
+
+### Question 4 (10 marks)
+
+Use an appropriate linear model to estimate the effect of program
+participation in (i) the raw data and (ii) the matched data.
+
+### Question 5 (10 marks)
+
+What are the implications for the positivity and consistency assumptions
+in this example?
+
+------------------------------------------------------------------------

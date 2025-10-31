@@ -1,0 +1,94 @@
+---
+title: "HDAT9800 Chapter 3 Optional Unmarked Exercise"
+author: "Your name"
+date: "XX/XX/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# include any libraries you need here, you will at least need the following
+library(datasets)
+library(ggplot2)
+# set any global chunk options using knitr::opts_chunk$set(...)
+```
+
+## Introduction
+
+We will be looking at the `ChickWeight` dataset from the _datasets_ package.
+
+The `ChickWeight` dataset contains `r nrow(ChickWeight)` observations of `r length(names(ChickWeight))` variables.
+
+You can read more about `ChickWeight` by typing `?ChickWeight` in the console when _datasets_ is loaded.
+
+Let's have a look at the first few lines of `ChickWeight`.
+
+```{r head}
+head(ChickWeight)
+```
+
+The description of `ChickWeight` is as follows:
+
+> Weight versus age of chicks on different diets
+
+Let's plot some aspects of `ChickWeight` to have a look.
+
+## Discussion
+
+First we'll plot `Time` _versus_ `weight` for the entire dataset.
+
+```{r time-versus-weight}
+ggplot(ChickWeight, aes(x=Time, y=weight)) +
+  geom_point()
+```
+
+We'd expect `weight` to go up over time.
+Let's add a smoothed mean to the graph using `geom_smooth()`. 
+
+```{r time-versus-weigh-with-mean}
+
+```
+
+Perhaps the `Diet` might affect `weight` gain.
+Let's differentiate our data points by changing the colour according to `Diet`. 
+
+```{r time-versus-weigh-with-mean-by-diet}
+
+```
+
+That's a bit hard to interpret.
+Facet the graphs by `Diet` as well so that each different value of `Diet` has its own plot. 
+
+```{r time-versus-weigh-with-mean-facetted-by-diet}
+
+```
+
+Add a layer to the graph which indicates mean ± standard error for each diet.
+Draw these in black so they can be more easily seen. 
+
+```{r time-versus-weigh-with-mean-facetted-by-diet-with-mean-and-se}
+
+```
+
+Let's tidy this up a bit by adding units to the axis labels.
+Add `(g)` to the y-axis label and `(days)` to the x-axis label. 
+
+```{r time-versus-weigh-with-mean-facetted-by-diet-labelled}
+
+```
+
+Finally, add a title to the plot: `Chick weight over time by diet`. 
+
+```{r time-versus-weigh-with-mean-facetted-by-diet-labelled-with-title}
+
+```
+
+Out of curiosity, let's try facetting by `Chick` instead (but leaving the colour set by `Diet`) :
+
+```{r time-versus-weigh-with-mean-facetted-by-chick-labelled, warning=FALSE}
+
+```
+
+## Questions
+
+  1. From the graphs, which diet seems to result in improved weight gain?
+  2. From the graphs, which chick(s) may have died during the course of the experiment? 

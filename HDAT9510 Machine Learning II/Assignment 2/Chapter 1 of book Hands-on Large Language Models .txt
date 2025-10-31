@@ -1,0 +1,168 @@
+Part of Chapter 1 of book Hands-on Large Language Models 
+
+Generating Your First Text
+An important component of using language models is selecting them. The main source for finding and downloading LLMs is the Hugging Face Hub. Hugging Face is the organization behind the well-known Transformers package, which for years has driven the development of language models in general. As the name implies, the package was built on top of the transformers framework that we discussed in “A
+Recent History of Language AI” on page 5.
+
+At the time of writing, you will find more than 800,000 models on Hugging Face’s platform for many different purposes, from LLMs and computer vision models to models that work with audio and tabular data. Here, you can find almost any open source LLM.
+Although we will explore all kinds of models throughout this book, let’s start our first lines of code with a generative model. The main generative model we use throughout the book is Phi-3-mini, which is a relatively small (3.8 billion parameters) but quite performant model.16 Due to its small size, the model can be run on devices with less
+than 8 GB of VRAM. If you perform quantization, a type of compression that we will further discuss in Chapters 7 and 12, you can use even less than 6 GB of VRAM. Moreover, the model is licensed under the MIT license, which allows the model to be used for commercial purposes without constraints!
+
+Keep in mind that new and improved LLMs are frequently released. To ensure this book remains current, most examples are designed to work with any LLM. We’ll also highlight different models in the repository associated with this book for you to try out.
+
+Let’s get started! When you use an LLM, two models are loaded:
+• The generative model itself
+• Its underlying tokenizer
+The tokenizer is in charge of splitting the input text into tokens before feeding it to the generative model. You can find the tokenizer and model on the Hugging Face site and only need the corresponding IDs to be passed. In this case, we use “microsoft/Phi-3-mini-4k-instruct” as the main path to the model.
+
+We can use transformers to load both the tokenizer and model. Note that we assume you have an NVIDIA GPU (device_map="cuda") but you can choose a different device instead. If you do not have access to a GPU you can use the free Google Colab notebooks we made available in the repository of this book:
+
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Load model and tokenizer
+model = AutoModelForCausalLM.from_pretrained(
+"microsoft/Phi-3-mini-4k-instruct",
+device_map="cuda",
+torch_dtype="auto",
+trust_remote_code=True,
+)
+tokenizer = AutoTokenizer.from_pretrained("microsoft/Phi-3-mini-4k-instruct")
+
+Running the code will start downloading the model and depending on your internet。connection can take a couple of minutes.
+Although we now have enough to start generating text, there is a nice trick in transformers. that simplifies the process, namely transformers.pipeline. It encapsulates the model, tokenizer, and text generation process into a single function:
+
+from transformers import pipeline
+
+# Create a pipeline
+generator = pipeline(
+"text-generation",
+model=model,
+tokenizer=tokenizer,
+return_full_text=False,
+max_new_tokens=500,
+do_sample=False
+)
+
+The following parameters are worth mentioning:
+
+return_full_text
+By setting this to False, the prompt will not be returned but merely the output of the model.
+
+max_new_tokens
+The maximum number of tokens the model will generate. By setting a limit, we prevent long and unwieldy output as some models might continue generating output until they reach their context window.
+
+do_sample
+Whether the model uses a sampling strategy to choose the next token. By setting this to False, the model will always select the next most probable token. In Chapter 6, we explore several sampling parameters that invoke some creativity in the model’s output.
+
+To generate our first text, let’s instruct the model to tell a joke about chickens. To do so, we format the prompt in a list of dictionaries where each dictionary relates to an entity in the conversation. Our role is that of “user” and we use the “content” key to define our prompt:
+
+# The prompt (user input / query)
+messages = [
+{"role": "user", "content": "Create a funny joke about chickens."}
+]
+# Generate output
+output = generator(messages)
+print(output[0]["generated_text"])
+
+Why don't chickens like to go to the gym? Because they can't crack the eggsistence of it!
+And that is it! The first text generated in this book was a decent joke about chickens.
+
+
+=================================
+
+example of GTP model apply
+Text Generation with Large Language Models in Google Colab: A Step-by-Step Guide.
+Cell 1: Install Required Libraries
+# Install the Hugging Face transformers library, which provides easy access to pre-trained language models
+# Check the Hugging Face documentation for more information
+!pip install transformers
+
+Cell 2: Import Libraries and Load Model
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+
+# Define the model name. You can replace 'gpt2' with the name of other model if available.
+model_name = "gpt2"
+
+# Load the tokenizer associated with the model. The tokenizer converts text into the format the model understands.
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+# Load the language model. AutoModelForCausalLM is used for models that generate text in a causal, left-to-right manner.
+model = AutoModelForCausalLM.from_pretrained(model_name)
+
+# Move the model to the GPU if available to speed up computations, otherwise use the CPU.
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model.to(device)
+
+
+Cell 3: Define the Prompt and Tokenize
+# Define the prompt for text generation. Since we plan to generate multiple prompts, label this as prompt_number_01.
+prompt_number_01 = "This patient was admitted to hospital with a heart attack and"
+
+# Tokenize the input prompt. Tokenization is the process of converting text into numerical tokens that the model can process.
+# The `return_tensors="pt"` option specifies that the output should be in PyTorch format (pt).
+inputs = tokenizer(prompt_number_01, return_tensors="pt").to(device)
+
+
+Cell 4: Generate Text
+# Generate text based on the input prompt with specified settings.
+# - max_length=50 limits the length of the generated text to 50 tokens.
+# - num_return_sequences=1 specifies that only one sequence of text should be generated.
+# - temperature=0.7 controls randomness; a value less than 1 makes the output more deterministic.
+# - pad_token_id=tokenizer.eos_token_id sets the padding token to the end-of-sequence token for coherent generation.
+
+outputs = model.generate(
+    inputs["input_ids"],
+    attention_mask=inputs["attention_mask"],  # Adding attention mask for reliable results
+    max_length=50,
+    num_return_sequences=1,
+    temperature=0.7,
+    pad_token_id=tokenizer.eos_token_id  # Setting pad token ID to eos token ID
+)
+
+
+Cell 5: Decode and Print Output
+# Decode the generated output tokens back into readable text
+generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+# Print the generated text
+print("Generated text:", generated_text)
+
+Generated text: This patient was admitted to hospital with a heart attack and died on the way to the hospital.
+
+The patient was taken to the hospital with a serious heart attack.
+
+The patient was taken to the hospital with a serious heart attack.
+
+
+
+This repetitive output can happen if the model gets "stuck" in a loop, a common issue with smaller models like gpt2. Here are some adjustments you can make to improve the diversity and coherence of the generated text:
+1. Increase the temperature: Raising it slightly can introduce more randomness and reduce repetition.
+2. Adjust top_k and top_p: Setting these values can help encourage more diverse outputs by controlling how the model samples from its predictions.
+
+# Generate text with additional parameters to improve output diversity
+outputs = model.generate(
+    inputs["input_ids"],
+    attention_mask=inputs["attention_mask"],
+    max_length=50,
+    num_return_sequences=1,
+    temperature=1.0,  # Increasing temperature for more randomness
+    top_k=50,         # Limits sampling to top 50 tokens, reducing repetitive patterns
+    top_p=0.9,        # Enables nucleus sampling to further encourage diverse output
+    pad_token_id=tokenizer.eos_token_id
+)
+
+/usr/local/lib/python3.10/dist-packages/transformers/generation/configuration_utils.py:572: UserWarning: `do_sample` is set to `False`. However, `top_p` is set to `0.9` -- this flag is only used in sample-based generation modes. You should set `do_sample=True` or unset `top_p`.
+  warnings.warn(
+
+# Decode the generated output tokens back into readable text
+generated_text_attempt_02 = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+# Print the generated text
+print("Generated text:", generated_text_attempt_02)
+
+Generated text: As a student of health data science, I'd like to see a more comprehensive approach to the problem of obesity.
+
+I'm not sure how to answer this question. I'm not sure how to answer this question.
+
+I'm not

@@ -1,0 +1,57 @@
+HDAT9800 Visualisation and Communication of Health Data - Term 2 2024
+=====================================================================
+
+Chapter 1 optional unmarked exercise - to be submitted (pushed) to GitHub, no due date. 
+
+STUDENT NAME:
+
+Please write *brief* answers to the following questions. Tasks 3 and 4 only require a single line to answer. For the other tasks, just 3 or 4 lines is enough. Please don't write more than 12 lines for each task.
+
+1. What is your previous R and programming experience (if any)?
+   [we’d like your input to know where you’re at]
+
+
+
+
+
+
+2. A colleague comes to you and claims ‘I always use a bar chart
+   because it’s always the best presentation format.’ Is your colleague
+   speaking sense? If so why is the statement right? If not how do you
+   counter the argument?
+
+
+
+
+
+
+3. When communicating it is very important to ‘know your …’? Finish this sentence.
+
+
+
+
+
+
+4. Why is an automated approach to data manipulation better than a
+   manual approach? Why should we write code to manipulate data rather
+   than do it by hand?
+
+
+
+
+
+
+4. What does CRAN stand for and what is it?
+
+
+
+
+
+
+5. State one advantage to the literate programming approach?
+
+
+
+
+
+

@@ -1,0 +1,39 @@
+dag {
+"Area-Level Deprivation" [pos="-1.343,-1.064"]
+"FNP Participation" [exposure,pos="-1.471,-0.471"]
+"Low birthweight (<2,500g)" [outcome,pos="0.063,-0.450"]
+"Maternal Age" [adjusted,pos="-0.411,-1.185"]
+"Maternal Ethnicity" [pos="-1.012,-1.534"]
+"Maternal Health (Pre-Pregnancy)" [latent,pos="-0.471,0.199"]
+"Maternal Nutrition During Pregnancy" [adjusted,pos="-1.127,-0.149"]
+"Maternal educational level (General Certificate of Secondary Education)" [pos="-0.944,-1.227"]
+"Prenatal Care Quality" [adjusted,pos="-0.602,-0.676"]
+"Smoking or Substance Use During Pregnancy" [pos="-0.628,-0.061"]
+"Unplanned admission for maltreatment/injury" [pos="-0.552,0.483"]
+"preterm birth" [pos="-0.086,-0.029"]
+"Area-Level Deprivation" -> "Maternal Nutrition During Pregnancy"
+"Area-Level Deprivation" -> "Maternal educational level (General Certificate of Secondary Education)"
+"Area-Level Deprivation" -> "Prenatal Care Quality"
+"FNP Participation" -> "Low birthweight (<2,500g)"
+"FNP Participation" -> "Prenatal Care Quality"
+"Maternal Age" -> "FNP Participation"
+"Maternal Age" -> "Low birthweight (<2,500g)"
+"Maternal Ethnicity" -> "Maternal Age"
+"Maternal Ethnicity" -> "Maternal educational level (General Certificate of Secondary Education)"
+"Maternal Health (Pre-Pregnancy)" -> "Low birthweight (<2,500g)"
+"Maternal Health (Pre-Pregnancy)" -> "preterm birth"
+"Maternal Nutrition During Pregnancy" -> "Low birthweight (<2,500g)"
+"Maternal Nutrition During Pregnancy" -> "Maternal Health (Pre-Pregnancy)"
+"Maternal educational level (General Certificate of Secondary Education)" -> "FNP Participation"
+"Maternal educational level (General Certificate of Secondary Education)" -> "Maternal Age"
+"Maternal educational level (General Certificate of Secondary Education)" -> "Prenatal Care Quality"
+"Prenatal Care Quality" -> "Low birthweight (<2,500g)"
+"Prenatal Care Quality" -> "Maternal Health (Pre-Pregnancy)"
+"Prenatal Care Quality" -> "preterm birth"
+"Smoking or Substance Use During Pregnancy" -> "Low birthweight (<2,500g)"
+"Smoking or Substance Use During Pregnancy" -> "Maternal Health (Pre-Pregnancy)"
+"Smoking or Substance Use During Pregnancy" -> "preterm birth"
+"Unplanned admission for maltreatment/injury" -> "Maternal Health (Pre-Pregnancy)"
+"Unplanned admission for maltreatment/injury" -> "preterm birth"
+"preterm birth" -> "Low birthweight (<2,500g)"
+}

@@ -1,0 +1,91 @@
+A brief explanation of each of the 36 clinical measures that were assessed during the ICU stay of patients, along with an understanding of the three summary variables (minimum, maximum, and difference):
+
+1. **Albumin**: A protein produced by the liver, important for maintaining blood volume and pressure.
+2. **ALP (Alkaline Phosphatase)**: An enzyme linked to the liver, bile ducts, and bone health.
+3. **ALT (Alanine Transaminase)**: An enzyme that helps the liver convert food into energy, indicative of liver health.
+4. **AST (Aspartate Transaminase)**: An enzyme found in the liver, heart, and other tissues. Elevated levels may indicate liver or heart damage.
+5. **Bilirubin**: A waste product processed by the liver from old blood cells. High levels can indicate liver issues.
+6. **BUN (Blood Urea Nitrogen)**: Measures the amount of nitrogen in the blood that comes from urea, a waste product processed by the kidneys.
+7. **Cholesterol**: A fatty substance essential for building cells, but high levels can indicate a risk for heart disease.
+8. **Creatinine**: A waste product produced by muscles and processed by the kidneys, used to measure kidney function.
+9. **DiasABP (Diastolic Arterial Blood Pressure)**: The lower number in blood pressure readings, representing pressure between heartbeats.
+10. **FiO2 (Fraction of Inspired Oxygen)**: The percentage of oxygen in the air mixture that a patient breathes.
+11. **GCS (Glasgow Coma Score)**: A scale to assess consciousness after brain injury.
+12. **Glucose**: The level of sugar in the blood, important for diagnosing and managing diabetes.
+13. **HCO3 (Bicarbonate)**: An ion that helps maintain the blood's pH balance.
+14. **HCT (Hematocrit)**: The proportion of red blood cells in the blood, important for diagnosing anemia.
+15. **HR (Heart Rate)**: The number of heartbeats per minute.
+16. **K (Potassium)**: An essential mineral for heart, kidney, and other organ function.
+17. **Lactate**: An indicator of how well oxygen is being used by the body; high levels can indicate shock.
+18. **Mg (Magnesium)**: Important for many processes in the body, including nerve function and blood pressure regulation.
+19. **MAP (Mean Arterial Pressure)**: An average blood pressure reading that reflects the average pressure in a patient's arteries.
+20. **MechVent (Mechanical Ventilation)**: Indicates whether a patient is on mechanical breathing support.
+21. **Na (Sodium)**: Essential for blood pressure, nerve, and muscle function.
+22. **NIDiasABP (Non-invasive Diastolic Blood Pressure)**: Diastolic blood pressure measured without penetrating the skin.
+23. **NIMAP (Non-invasive Mean Arterial Pressure)**: Average arterial pressure measured non-invasively.
+24. **NISysABP (Non-invasive Systolic Blood Pressure)**: Systolic blood pressure measured non-invasively.
+25. **PaCO2 (Partial Pressure of CO2)**: The level of carbon dioxide in arterial blood, indicating lung function.
+26. **PaO2 (Partial Pressure of O2)**: The level of oxygen in arterial blood, important for assessing lung function.
+27. **pH**: The acidity or alkalinity of arterial blood.
+28. **Platelets**: Blood cells involved in clotting; important for identifying bleeding disorders.
+29. **RespRate (Respiratory Rate)**: Number of breaths taken per minute.
+30. **SaO2 (Oxygen Saturation)**: The level of oxygen saturation in the blood.
+31. **SysABP (Systolic Arterial Blood Pressure)**: The upper number in blood pressure readings, representing pressure during a heartbeat.
+32. **Temp (Temperature)**: Body temperature, important for identifying fevers or hypothermia.
+33. **TropI (Troponin I)**: A protein that indicates heart muscle damage.
+34. **TropT (Troponin T)**: Similar to Troponin I, it indicates heart damage.
+35. **Urine**: Measures the volume of urine output to assess kidney function.
+36. **WBC (White Blood Cell Count)**: Indicates immune function; important for diagnosing infections.
+37. **Weight**: Body weight in kilograms.
+
+Each measure has three variables assessed during the first 24 hours in the ICU:
+- **_min**: The minimum value recorded, reflecting the lowest physiological point.
+- **_max**: The maximum value recorded, indicating the highest point of stress or dysfunction.
+- **_diff**: The difference between the mean value and the most extreme value (min or max),
+
+
+1. **白蛋白**：肝脏产生的一种蛋白质，对于维持血容量和压力很重要。
+2. **ALP（碱性磷酸酶）**：一种与肝脏、胆管和骨骼健康相关的酶。
+3. **ALT（丙氨酸转氨酶）**：一种帮助肝脏将食物转化为能量的酶，表明肝脏健康。
+4. **AST（天冬氨酸转氨酶）**：一种存在于肝脏、心脏和其他组织中的酶。 水平升高可能表明肝脏或心脏受损。
+5. **胆红素**：肝脏从旧血细胞中处理的废物。 高水平可能表明肝脏有问题。
+6. **BUN（血尿素氮）**：测量血液中来自尿素的氮含量，尿素是肾脏处理的废物。
+7. **胆固醇**：一种构建细胞所必需的脂肪物质，但高水平可能表明存在患心脏病的风险。
+8. **肌酐**：肌肉产生并经肾脏处理的废物，用于测量肾功能。
+9. **DiasABP（舒张动脉血压）**：血压读数中较低的数字，代表心跳之间的压力。
+10. **FiO2（吸入氧气分数）**：患者呼吸的空气混合物中氧气的百分比。
+11. **GCS（格拉斯哥昏迷评分）**：评估脑损伤后意识的量表。
+12. **葡萄糖**：血液中的糖水平，对于诊断和管理糖尿病很重要。
+13. **HCO3（碳酸氢盐）**：一种有助于维持血液 pH 平衡的离子。
+14. **HCT（血细胞比容）**：血液中红细胞的比例，对于诊断贫血很重要。
+15. **HR（心率）**：每分钟的心跳次数。
+16. **K（钾）**：心脏、肾脏和其他器官功能必需的矿物质。
+17. **乳酸**：身体利用氧气情况的指标； 高水平可能表明休克。
+18. **Mg（镁）**：对于身体的许多过程很重要，包括神经功能和血压调节。
+19. **MAP（平均动脉压）**：反映患者动脉平均压力的平均血压读数。
+20. **MechVent（机械通气）**：指示患者是否接受机械呼吸支持。
+21. **Na（钠）**：对于血压、神经和肌肉功能至关重要。
+22. **NIDiasABP（无创舒张压）**：不穿透皮肤测量舒张压。
+23. **NIMAP（无创平均动脉压）**：无创测量的平均动脉压。
+24. **NISysABP（无创收缩压）**：无创测量的收缩压。
+25. **PaCO2（二氧化碳分压）**：动脉血中二氧化碳的水平，表明肺功能。
+26. **PaO2（氧气分压）**：动脉血中的氧含量，对于评估肺功能很重要。
+27. **pH**：动脉血的酸度或碱度。
+28. **血小板**：参与凝血的血细胞； 对于识别出血性疾病很重要。
+29. **RespRate（呼吸频率）**：每分钟呼吸次数。
+30. **SaO2（氧饱和度）**：血液中的氧饱和度水平。
+31. **SysABP（动脉收缩压）**：血压读数的上限数字，代表心跳期间的压力。
+32. **Temp（温度）**：体温，对于识别发烧或体温过低很重要。
+33. **TropI（肌钙蛋白 I）**：一种表明心肌损伤的蛋白质。
+34. **TropT（肌钙蛋白T）**：与肌钙蛋白I类似，表明心脏受损。
+35. **尿液**：测量尿量以评估肾功能。
+36. **WBC（白细胞计数）**：表示免疫功能； 对于诊断感染很重要。
+37. **体重**：体重（公斤）。
+
+每项措施都在 ICU 的前 24 小时内评估三个变量：
+- **_min**：记录的最小值，反映最低的生理点。
+- **_max**：记录的最大值，表示压力或功能障碍的最高点。
+- **_diff**：平均值和最极值（最小值或最大值）之间的差异，
+
+
+

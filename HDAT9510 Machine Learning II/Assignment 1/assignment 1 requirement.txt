@@ -1,0 +1,148 @@
+Assignment 1: 
+Instructions
+Assignment Title:
+"Deep Learning for Pneumonia Detection: Analyzing Chest X-Ray Images with CNNs"
+
+Learning Objectives:
+At the end of this assignment, students will be able to:
+
+Apply convolutional neural networks (CNNs) to medical imaging data using Keras and Tensorflow.
+Critically analyze the performance of a deep learning model in a healthcare context.
+Explore the role of AI in medical image classification, specifically pneumonia detection.
+Assignment 1 Structure and Submission Guidelines
+I have divided the assignment into two parts so you can receive feedback while working on it: Assignment 1A (50 marks) and Assignment 1B (50 marks). You can optionally submit Assignment 1A early to receive preliminary feedback, which you can incorporate into your final submission due at the end of Week 5.
+
+Assignment 1A (questions 1 to 5): - 50 marks
+This section includes 5 questions. Correctly solving the first 4 questions will earn you up to 40 marks. Question 5 is a more challenging extension, and solving it will earn you the remaining 10 marks.
+
+Deadline for feedback for Assignment 1A (optional): Please refer to the assignment table for deadlines. This deadline is for those who would like to receive brief feedback or ask questions about this first part (questions 1-5). Note that this part will not be formally marked at this stage; that is, no mark will be given at this stage, only brief feedback will be provided. The final submission will be graded along with Assignment 1B. The final submission will contain the questions from Assignment 1A (questions 1 to 5) + the questions from Assignment 1B (questions 6 and above).
+
+Assignment 1B (questions 6 and 7) - 50 marks
+This section includes 2 questions. Correctly solving question 6 will earn you up to 25 marks. Question 7 is a more challenging extension, and solving it will earn you the remaining 25 marks.
+
+Final submission: Assignment 1 = Assignment 1A + Assignment 1B
+Only one notebook will be submitted for marking. 
+
+General Instructions:
+Context - Health Question (the study question): Read this journal paper [link].  
+Dataset: The paper contains a table called "Key Resources Table". Click the link there to download the dataset.
+How to code the algorithms -
+
+Use this book as a template : "Hands-on Machine Learning with Scikit-Learn, Keras, and TensorFlow : concepts, tools, and techniques to build intelligent systems". Aurélien Géron. Second edition., Sebastopol, CA : O'Reilly, 3rd Edition. 2022. E-book available at the UNSW Library.
+
+Use the Keras documentation, especially to ensure you have the most up-to-date code for the latest version.
+Limitations: The models may take a significant amount of time to run, so please choose the number of epochs and data points (i.e., images) carefully. We are mindful of hardware limitations, and this assignment is designed to be a proof of concept, rather than a complete solution to the research question. Therefore, do not be discouraged if the model's performance is not optimal. The focus of the assignment is on the reasoning and rationale you apply when constructing your solution within these limitations, particularly in terms of hardware.
+For example, as a health data scientist, consider whether it is necessary to use the entire "train" dataset, or if a subset of the data will suffice for training the model.
+
+Evaluation of the models: Use the classification_report and confusion matrix metrics for model evaluation. If you use other metrics such as the ROC curve, do not include them in your final submission.
+
+Justification for your decisions is crucial. Provide a one or two sentence explanation for each section preceding the relevant Python code block using "Text" cells. There is a word limit for these sections.
+
+Labels: Clear labels for printed results and briefly detail the steps followed.Marks will be deducted if this instruction is not followed.
+
+Programming Language: Python.
+
+Main Libraries: Keras, tensorflow and scikit-learn.
+
+Python code comments: Comment and document every line of code, as this will likely serve as a foundation for team-based algorithm development in the future. Marks will be deducted if this instruction is not followed. You are encouraged to use "Sanity Checks" during the construction of the algorithms. Please do not include them in your final submission. Marks will be deducted if this instruction is not followed
+
+Format: Jupyter Notebook. 
+
+Submission: Upload the Jupyter Notebook to the designated section in OpenLearning. Submissions will close precisely at the deadline.
+
+File name: Include your first and last names in the document's title. For example: z8888888-Anne-Ross.ipynb
+
+References and citations: Provide references to all the work you copy from other sources (including generative AI, blogs, websites, ...). You can reference your sources using comments, or using a specific section at the end.
+Marking criteria: Marks will be deducted for failure to follow the previous instructions. Please refer to the rubric for detailed assessment criteria.
+
+Questions 1 to 5 (Assignment 1A):
+Question 1: Health Question (10 marks)
+What is the research question here (in our assignment, as the paper described more than one question)? Describe the clinical problem being addressed. Refer to the journal paper and summarize the key health issue the algorithm is designed to solve.
+
+What is it that we need to do? Explain the technical task involved. 
+
+How is the algorithm going to be used? For example, discuss the practical applications of this algorithm in a clinical setting. How could this model assist healthcare professionals in diagnosing pneumonia? Consider the potential impact on diagnostic speed, accuracy, and patient outcomes.
+
+What programming language are you going to use?
+ 
+
+ 
+
+Clarification for Question 1:
+
+Please note that the research question you are expected to answer is specific to this assignment. While the journal paper provides valuable background information and context, the research question for this assignment must be based on the specific tasks we are asking you to perform, using the data, disease, and setting described in the paper.
+
+To clarify: Do not simply restate the research question from the journal article. Instead, formulate a research question that addresses the clinical problem and technical tasks outlined in this assignment. Your research question should reflect the focus on pneumonia diagnosis using the provided dataset and the algorithm's application in a clinical setting.
+
+Question 2: Docstring (5 marks)
+Create a docstring that includes the following:
+
+Purpose: The top-level aim of our program. (Please limit this to 50 words).
+Author(s).
+Dates.
+Method: Describe the steps of your program (you will need to write this part after all these questions have been released).
+List of Variables, Constants, and Functions: In this question, you are required to write clear and informative docstrings for each of your functions in the Python code (see instructions below). Additionally, ensure that all variables and constants used in your program are clearly documented, explaining their purpose and usage. Proper documentation is crucial for making your code readable, maintainable, and understandable by others, especially when working on AI models in healthcare.
+Docstrings for your functions: For every function you write (e.g., data loading, preprocessing, model building, evaluation), include a docstring that explains:
+What the function does (a brief description of its purpose).
+Parameters (input arguments and their data types).
+Returns (what the function outputs).
+Example usage (optional but recommended for more complex functions).
+
+
+Variables and Constants: For each variable and constant used in the code (e.g., learning rates, batch sizes, number of epochs), add comments or descriptions explaining:
+What the variable or constant represents.
+Why it is used in that part of the program.
+
+
+ 
+
+Question 3: Data Preprocessing (10 marks)
+Load and preprocess the dataset.
+Perform some data augmentation techniques such as rotation, zooming, and flipping to enhance model performance.
+ 
+
+Question 4: model-2-classes-benchmark - Model Training and Evaluation (15 marks)
+
+Implement a CNN to classify images as 'normal' or 'pneumonia'. Use the model you created in the 'Before-class: Weekly Hands-on Mini-Exercise' section [week 1], and add at least one extra component at your discretion. Explain the rationale behind your addition/s.
+Evaluate the model performance using metrics such as accuracy, precision, recall, F1-score, and AUC..
+Name the model 'model-2-classes-benchmark'. Save the model so you don't have to retrain it every time you close and reopen the notebook.
+ 
+
+Question 5 - model-3-classes - Model Training and Evaluation (10 marks)
+Implement a CNN to classify images into "normal", "bacterial pneumonia" and "viral pneumonia".
+Evaluate the model performance. 
+Name the model "model-3-classes". Save the model so you don't have to retrain it every time you close and reopen the notebook.
+ 
+
+ 
+
+ 
+
+Question 6: Denoiser Autoencoder and Transfer Learning (25 marks)
+Objective: Implement a denoiser autoencoder to reconstruct chest X-ray images and then use a neural network for transfer learning to classify images into "normal" and "pneumonia."
+
+Denoiser Autoencoder:
+Train a denoising autoencoder using a subset of the dataset to remove noise from the images. Add random noise to the X-ray images and train the autoencoder to reconstruct the original, clean images.
+Show 5 reconstructed images after training and compare them with the noisy input images.
+Transfer Learning with a Dense Neural Network:
+Use the encoder part of your denoiser autoencoder for transfer learning. Freeze the encoder layers and add a neural network to classify images as "normal" or "pneumonia" (binary classification).
+Train the model and evaluate its performance.
+Justify your approach and explain whether using the encoder's learned features improves classification performance compared to the previous model you built in Assignment 1A. 
+ 
+
+Question 7: Variational Autoencoder (VAE) for Image Generation and Anomaly Detection (25 marks)
+Objective: Implement a variational autoencoder (VAE) to generate synthetic images of healthy individuals (i.e., those not infected with pneumonia). As an extra task, use the VAE for anomaly detection to identify images of individuals infected with pneumonia.
+
+Variational Autoencoder:
+
+Train a simple VAE using a subset of the dataset containing only images of healthy individuals (i.e., no pneumonia).
+Generate 5 synthetic images from the latent space and display them. We would like to test the VAE as a proof of concept for balancing our dataset.
+Evaluation:
+
+Discuss the quality of the generated images. Explain how well the VAE captures the characteristics of healthy individuals and any limitations observed in the generated samples.
+Provide an analysis of how VAEs could be utilized for augmenting datasets or generating synthetic medical data for further model training.
+Extra Task: Anomaly Detection:
+
+Use the VAE's reconstruction loss as a means of detecting anomalies. Create a simple classifier that uses the reconstruction error to detect infected (pneumonia) images.
+Classify images as "healthy" or "infected" based on whether the reconstruction error is above or below a defined threshold.
+Discuss the performance of this simple classifier and its potential usefulness for identifying infected images.

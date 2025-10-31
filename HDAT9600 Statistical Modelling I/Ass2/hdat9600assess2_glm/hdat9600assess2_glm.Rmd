@@ -1,0 +1,171 @@
+---
+title: "HDAT9600 Generalised Linear Models Assignment"
+subtitle: "02/04/2024"
+author: "Zhenyu Zhang"
+date: '`r format(Sys.Date(), "%d %B, %Y")`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# leave this code here, but feel free to adjust the options or add some more
+# see the knitr documentation for details
+knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=12)
+```
+
+
+## Instructions
+
+This file is the R Markdown document in which you need to complete your HDAT9600 Generalised Linear Model assignment. This assignment is assessed and will count for 25% of the total course marks.
+
+You should now complete the tasks described below, in the spaces provided. Don't hesitate to ask the course convenor for help (use the OpenLearning environment to do that) --- but remember that these are **individual** assignments and thus what you submit should be your own work, and you need to both understand and be able to explain what you did in your solutions. The course convenor is happy to point you in the right direction and to make suggestions, but won't, of course, complete your assignment for you!
+
+Each task below attracts the indicated number of marks (out of a total of 25 marks for the assignment). A marking rubric is also provided separately to give you an idea of what you should be aiming for across 4 areas: EDA; Modelling; Interpretation; Presentation. 
+
+
+## Task 1 Logistic Regression predictive model 
+
+### (10 marks: Modelling (4); Interpretation(3); Presentation(3))
+
+The data set labour.csv is from a 1977 survey of Canadian couples and families. The variables are `work`, whether the female of the household undertook any paid employment either full time or part time (1=did not take paid employment, 0=took paid employment), `hincome`, income of the male member of the household (in $1000’s), `children`, a factor variable deﬁning whether children were present in the household and `region`, a factor with levels: Atlantic, (Atlantic Canada); BC, (British Columbia); Ontario; Prairie, (Prairie provinces); Quebec.
+
+The objective is to *predict* female participation in the labour force using the `work` variable as the outcome.
+
+Build a suitable model (including, if appropriate, two-way interactions). Produce the Receiver Operating Curve (RoC) and Area Under the Curve (AUC) for any model you propose. Interpret and comment on how useful this model is for predicting the outcome `work`. 
+
+*Note: You may find it useful to undertake EDA before fitting your model but please note you will NOT be marked on the EDA for Task 1 and should suppress the EDA output from appearing in the knitted html document (eg. using 'include=FALSE' in the options for the EDA related code blocks). Add additional code and text blocks if you wish.* 
+
+```{r task1-setup}
+# load the labour dataset and make it available for code in 
+# subsequent code chunks.
+mydat <- file.path("C:/Users/froze/OneDrive/Documents/2.1 UNSW bioinfo/HDAT9600/Assignment/Ass1")
+
+body <- read.csv(file.path(mydat, "body.csv"))
+
+```
+
+```{r task1}
+# insert your R code (with comment lines if you wish) here
+
+```
+
+<br>
+
+
+_Replace this text with your commentary for task 1_
+
+
+
+
+## Task 2: Binomial GLM explanatory model 
+
+
+In this task, you will be using the `esoph` dataset which comes with the core R installation. 
+
+The manual (help) page for the `esoph` dataset states the following:
+
+**Description**
+
+* Data from a case-control study of (o)esophageal cancer in Ille-et-Vilaine, France.
+* A data frame with records for 88 age/alcohol/tobacco combinations.
+
+**Columns**
+
+`agegp`
+:  Age group: 25--34 years, 35--44 years, 45--54 years, 55--64 years, 65--74 years, 75+ years
+
+`alcgp`
+:  Alcohol consumption:	0--39 gm/day, 40--79 gm/day, 80--119 gm/day, 120+  gm/day
+
+`tobgp`
+:  Tobacco consumption: 0-- 9 gm/day, 10--19 gm/day, 20--29 gm/day, 30+ gm/day
+
+`ncases`
+:  Number of cases	
+
+`ncontrols`
+:  Number of controls
+
+### 2A: Brief EDA 
+#### (4 marks: EDA(2); Interpretation(1); Presentation(1))
+
+Carry out a brief graphical exploratory data analysis looking at the frequency distribution of cases versus controls across population subgroups: 
+
+* Create a separate scatter or bar plot (choose which you think works better) for each of the three predictor variables (`agegrp`, `alcgroup` , `tobgp`). Use the levels of the predictor variable as categories on the x-axis. On the y axis plot the proportion of cases AND the proportion of controls. (This should result in three plots - ONE plot per predictor). 
+* For `alcgroup` and `tobgp`, layer/facet each of these plots by `agegrp` to form a grid of sub-plots which shows distribution of cases and controls by alcohol and tobacco consumption for each age group. If necessary, rotate or adjust the axis labels and/or use the fig.width and fig.height parameters for the R code blocks below to ensure that the resulting plot is neatly presented and all text is legible. (This should result in TWO grid plots or matrix plots - ONE for `alcgroup` and ONE for `tobgp`).
+
+* Write a brief commentary describing what these plots show (one or two sentences only).
+
+```{r task2a-1}
+# insert your R code (with comment lines if you wish) here
+
+```
+
+```{r task2a-2}
+# insert your R code (with comment lines if you wish) here
+
+```
+
+Additional code blocks here if required.
+
+_Replace this text with your commentary for task 2A_
+
+
+### 2B: Binomial GLM with ordinal predictors 
+
+#### (2 marks: Modelling (1) Interpretation (1))
+
+Examine the `class()` and/or the `str()` of the `agegp`, `alcgp` and `tobgp` variables in the `esoph` dataset. Note that these three variables are 'ordinal factors'. 
+Fit a binomial GLM with `agegp`, `alcgp` and `tobgp` as the predictors (you can include the cancer cases outcome by using a matrix of cases and controls eg. cbind(ncases,ncontrols)). Display the model object using `summary()`. Describe what you notice about the output. Do some research to discover why the model has been fitted by R in that way, and write a brief (one or two sentence) explanation.
+ 
+```{r task2b}
+# insert your R code (with comment lines if you wish) here
+
+```
+
+_Replace this text with your commentary for task 2B_
+
+### 2C: Binomial GLM with unordered factors as predictors 
+#### (4 marks: Modelling (3); Presentation (1))
+
+Convert the three predictor variables in task 2B above to factor variables that are _not ordered_ (HINT: factor( , ordered = FALSE)). Give the levels useful labels so that you know what they mean. Then re-fit your model including these three unordered factors as predictor variables. Briefly assess model fit and then calculate Odds Ratios and confidence intervals where needed. Your results should aim to be concise but comprehensive enough to address the questions outlined below in section 2D. 
+
+
+```{r task2c}
+# insert your R code (with comment lines if you wish) here
+
+```
+
+<br>
+
+### 2D: Interpreting the Binomial GLM (3 marks)
+#### (3 marks: Interpretation (3))
+
+Based on your analysis, provide a clear succinct written response to the following analytical questions: <br>
+(i)    Can the model be simplified? Justify your response? <br>
+(ii)   What is the relationship between alcohol consumption and esophageal cancer after controlling for age and tobacco consumption? Include key results to support your conclusions. <br>
+(iii)  What is the relationship between tobacco consumption and esophageal cancer after controlling for age and alcohol consumption? Include key results to support your conclusions. <br>
+
+_Replace this text with your commentary for task 2D_
+
+
+
+## Task 3 Limitations of logistic regression 
+#### (2 marks: Interpretation (2))
+
+Explain in your own words one issue you may encounter when using logistic regression to model a common outcome. A common outcome is, for example, one where you might expect about 40-50% of people will experience the outcome. 
+
+_Replace this text with your commentary for task 3_
+
+
+## Save, knit and submit
+
+**Reminder**: don't forget to save this file, to knit it to check that everything works, and then submit via the drop box in Openlearning.
+
+## Submit your assignment
+
+When you have finished, and are satisfied with your assignment solutions, and this file knits without errors and the output looks the way you want, then you should submit via the drop box in Openlearning.
+
+
+### Problems?
+
+If you encounter problems with any part of the process described above, please contact the course convenor via OpenLearning as soon as possible so that the issues can be resolved in good time, and well before the assignment is due.

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<!-- saved from url=(0030)https://dagitty.net/dags.html# -->
+<html lang="en" class=""><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <!--
+        DAGitty - a graphical tool for analyzing causal diagrams
+        Copyright (C) 2010-2023 Johannes Textor, Benito van der Zander
+    
+        This program is free software; you can redistribute it and/or
+        modify it under the terms of the GNU General Public License
+        as published by the Free Software Foundation; either version 2
+        of the License, or (at your option) any later version.
+    
+        This program is distributed in the hope that it will be useful,
+        but WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        GNU General Public License for more details.
+    
+        You should have received a copy of the GNU General Public License
+        along with this program; if not, write to the Free Software
+        Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.   
+    -->
+
+    <title>DAGitty v3.1</title>
+    <link rel="stylesheet" type="text/css" href="./DAGitty v3.1_files/dags.css">
+
+    <script src="./DAGitty v3.1_files/dagitty.js.download"></script>
+    <script src="./DAGitty v3.1_files/example-dags.js.download"></script>
+
+    <script src="./DAGitty v3.1_files/semlike.js.download"></script>
+    <script src="./DAGitty v3.1_files/original.js.download"></script>
+
+    <script src="./DAGitty v3.1_files/main.js.download"></script>
+    <script src="./DAGitty v3.1_files/base64.js.download"></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <script>
+    var redraw;
+    var renderer;
+    var layouter;
+    var height = 300;
+    var width = 600;
+    var mouse_on_canvas;
+    var resize_timeout;
+    var mouse_x = 0;
+    var mouse_y = 0;
+
+    var Model = {
+        dag : null, 
+        dag_active_bias_graph : null,
+        dag_ancestor_moral_graph : null,
+        dag_ancestor_pair_graph : null,
+        dag_model_text_data : null
+    };
+
+    var DAGittyControl;
+
+    function initialize(){
+
+
+        DAGitty.setup({autofocus:true});
+        DAGittyControl = DAGitty.controllers[0];
+        
+        GUI.menus = ["model","examples","howto","layout","help"]
+        _.each(GUI.menus,function(t){
+            document.getElementById("menu_"+t+"_title").addEventListener( 'click', 
+                function(){menuToggle(t)} );
+        });
+        
+        DAGittyControl.observe( 'graphchange',
+            function(g){
+                Model.dag = g;
+                document.getElementById("adj_matrix").value = g.toString();
+                // if previously highlighted variable no longer exists, fold up this menu
+                if( !g.getVertex(document.getElementById("variable_id").value) ){
+                    document.getElementById("variable_id").value = ''
+                }
+                displayImplicationInfo( false )
+                causalEffectEstimates( document.getElementById("causal_effect_kind").value )
+                displayGeneralInfo()
+                GUI.refresh_variable_status()
+            }
+        );
+        
+        DAGittyControl.observe( 'graphlayoutchange',
+            function(g){
+                document.getElementById("adj_matrix").value = g.toString();
+            }
+        );
+
+        DAGittyControl.observe( 'vertex_marked',
+            function( v ){
+                if( v ){
+                    displayShow( 'variable' )
+                    document.getElementById("variable_id").value = v.id
+                    GUI.refresh_variable_status()
+                } else {
+                    if( !Model.dag.getVertex(document.getElementById("variable_id").value) ){
+                        displayHide( 'variable' )
+                    }
+                }
+            }
+        );
+
+        var getid = (function(){
+            var regexS = "[\\?&]id=([^&#]*)";
+            var regex = new RegExp(regexS);
+            var results = regex.exec(window.location.search);
+            if(results == null)
+                return "";
+            else
+                return decodeURIComponent(results[1].replace(/\+/g, " "));
+        })();
+
+        if( getid ){
+            // load user-supplied model
+            loadOnline( "dagitty.net/m"+getid );
+        } else {
+            DAGittyControl.graphChanged();
+        }
+
+        document.onkeydown = function(e){
+            if( e.keyCode == 27 ){
+                DAGittyControl.getView().getImplementation().stopMousemove()
+                DAGittyControl.getView().closeDialog()
+            }
+        }
+    }
+    window.onload = initialize;
+    </script>
+    
+<style data-styled="" data-styled-version="4.4.1"></style><link type="text/css" rel="stylesheet" charset="UTF-8" href="./DAGitty v3.1_files/m=el_main_css"></head>
+<body cz-shortcut-listen="true">
+
+<main>
+
+    <ul id="menu">
+      <li><a href="javascript:void(0)" id="menu_model_title">Model</a>
+         <ul id="menu_model" style="z-index: 15; display: none;">
+            <li><a href="https://dagitty.net/dags.html#" onclick="newModel();displayHide(&#39;menu_model&#39;)">New model</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="loadOnlineForm();displayHide(&#39;menu_model&#39;)">Load from dagitty.net</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="exportPNG();displayHide(&#39;menu_model&#39;)">Export as PNG</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="exportJPEG();displayHide(&#39;menu_model&#39;)">Export as JPEG</a></li>
+            <!--<li><a href="#" onclick="exportSVG();displayHide('menu_model')">Export as SVG</a></li>-->
+            <li><a href="https://dagitty.net/dags.html#" onclick="saveOnlineForm();displayHide(&#39;menu_model&#39;)">Publish on dagitty.net</a></li>
+
+            <script>
+                if( false && document.location.protocol == "https:" ){
+                    document.write('<li><a href="#" onclick="saveOnlineForm();displayHide(\'menu_model\')">Publish on dagitty.net</a></li>');
+                    document.write('<li><a href="#" onclick="updateOnlineForm();displayHide(\'menu_model\')">Update on dagitty.net</a></li>');
+                    document.write('<li><a href="#" onclick="deleteOnlineForm();displayHide(\'menu_model\')">Delete on dagitty.net</a></li>');
+            }
+
+               if( false && supportsSVG() ){
+                    document.write( '<li><a href="#" onclick="exportPDF();displayHide(\'menu_model\')">Export as PDF</a></li>' );
+               }
+            </script>
+        <li><a href="https://dagitty.net/dags.html#" onclick="exportTikzCode();displayHide(&#39;menu_model&#39;)">Export LaTeX code</a></li>
+    </ul>
+      </li>
+      <li><a href="javascript:void(0)" id="menu_examples_title">Examples</a>
+       <ul id="menu_examples" style="z-index: 14; display: none;">
+         <script>
+         for( var i = 0 ; i < examples.length ; i++ ){
+            document.write( "<li><a href=\"#\" onclick=\"loadExample("+i+");displayHide('menu_examples')\">"+examples[i].l+"</a></li>" );
+         }
+         </script><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(0);displayHide(&#39;menu_examples&#39;)">The M-bias graph</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(1);displayHide(&#39;menu_examples&#39;)">Extended confounding triangle</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(2);displayHide(&#39;menu_examples&#39;)">Small model with mediator</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(3);displayHide(&#39;menu_examples&#39;)">Many variables but few paths</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(4);displayHide(&#39;menu_examples&#39;)">Sebastiani et al., 2005</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(5);displayHide(&#39;menu_examples&#39;)">Polzer et al., 2012</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(6);displayHide(&#39;menu_examples&#39;)">Schipf et al., 2010</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(7);displayHide(&#39;menu_examples&#39;)">Shrier &amp; Platt, 2008</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(8);displayHide(&#39;menu_examples&#39;)">Acid &amp; de Campos, 1996</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(9);displayHide(&#39;menu_examples&#39;)">Thoemmes, 2013</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(10);displayHide(&#39;menu_examples&#39;)">van Kampen, 2014</a></li><li><a href="https://dagitty.net/dags.html#" onclick="loadExample(11);displayHide(&#39;menu_examples&#39;)">Didelez et al, 2010</a></li>
+       </ul>
+      </li>
+      <li><a href="javascript:void(0)" id="menu_howto_title">How to ...</a>
+         <ul id="menu_howto" style="z-index: 13; display: none;">
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To add a new variable, click/tap on the canvas.&#39;)">Add a variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To rename a variable, click/tap it and click/tap &quot;rename&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;r&quot; key on your keyboard.&#39;)">Rename a variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To add a new connection, click/tap on the start variable and then on the end variable.&#39;)">Add a connection</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To delete a variable, click/tap it and then clik/tap &quot;delete&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;delete&quot; or the &quot;d&quot; key on your keyboard.&#39;)">Delete a variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To delete a connection, click/tap on the start variable and then on the end variable.&#39;)">Delete a connection</a></li>   
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To save the model, copy-paste the content of the &quot;model code&quot; into your favourite text editor (e.g. &quot;Word&quot;).&#39;)">Save a model</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To set the exposure variable, click/tap it and check &quot;exposure&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;e&quot; key on your keyboard.&#39;)">Set exposure variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To set the outcome variable, click/tap it and check &quot;outcome&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;o&quot; key on your keyboard.&#39;)">Set outcome variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To toggle adjustment for a variable, click/tap it and check &quot;adjusted&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;a&quot; key on your keyboard.&#39;)">Adjust for variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To toggle selection status for a variable, click/tap it and check &quot;selected&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;s&quot; key on your keyboard.&#39;)">Define a selection variable</a></li>
+            <li><a href="https://dagitty.net/dags.html#" onclick="how(&#39;To toggle observed status for a variable, click/tap it and check &quot;unobserved&quot; in the &quot;variable&quot; tab, or move the mouse over it and press the &quot;u&quot; key on your keyboard.&#39;)">Make a variable unobserved (latent)</a></li>
+         </ul>
+      </li>
+      <li><a href="javascript:void(0)" id="menu_layout_title">Layout</a>
+         <ul id="menu_layout" style="z-index: 12; display: none;">
+            <li><a href="https://dagitty.net/dags.html#" onclick="generateSpringLayout();displayHide(&#39;menu_layout&#39;);return false">Generate layout automatically</a></li>
+         </ul>
+      </li>
+      <li style="border-right:none"><a href="javascript:void(0)" id="menu_help_title">Help</a>
+         <ul id="menu_help" style="z-index: 11; display: none;">
+            <li><a href="https://dagitty.net/manual-3.x.pdf" target="_blank" onclick="displayHide(&#39;menu_help&#39;)">Manual</a></li>
+            <li><a href="https://dagitty.net/learn/" target="_blank" onclick="displayHide(&#39;menu_help&#39;)">Other Resources</a></li>
+         </ul>
+      </li>
+      <li style="float:none; overflow: hidden; border-right: none;"> &nbsp;</li>
+   </ul>
+
+   <div id="canvas" class="dagitty" data-mutable="true" style="user-select: none; white-space: normal; text-align: center; position: relative;" tabindex="0"><svg width="2056" height="1233" style="font-family: Arial, sans-serif; width: 2056px; height: 1233px;"><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M281.15,359.84L510.39,810.85"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(510.38749798453335,810.8479470992978) rotate(243.05674689369866)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M292.47,342.94L707.53,264.03"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(707.528449562413,264.0329080070285) rotate(169.23562984663107)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M292.19,350.23L1099.85,545.90"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1099.851073613557,545.9018722297468) rotate(193.61891290264708)"></path></g><g class="path" style="cursor: move;"><path stroke="#4dac26" stroke-width="1.5" fill="none" d="M146.00,659.11L1864.00,669.86"></path><path stroke="#4dac26" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1864.0006207954805,669.8628033046277) rotate(180.35861210811564)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M145.84,657.11L1099.18,553.36"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1099.179345315794,553.361174555339) rotate(173.78896963388567)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1325.23,287.43L149.64,652.60"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(149.64252418317068,652.5973606856294) rotate(-17.256096802740693)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1359.49,291.86L1869.30,657.85"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1869.2967326727241,657.8471566372586) rotate(215.67435219496835)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M672.10,102.47L1320.08,276.73"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1320.0793597211189,276.7304225514772) rotate(195.05266636262508)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M660.86,111.80L721.67,241.86"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(721.6669479107085,241.8575460185495) rotate(244.9419335352992)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1291.88,1004.23L1867.71,680.33"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1867.7081567949906,680.3324861275818) rotate(150.6423441882515)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1294.16,1007.84L1694.07,897.70"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1694.0695644281043,897.7010919028082) rotate(164.6021325585176)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M541.00,826.79L1864.21,672.53"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1864.2061564934043,672.5303972966412) rotate(173.35039334927495)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M540.42,832.92L1250.96,1007.23"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1250.960881240678,1007.228441573251) rotate(193.7831361334733)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M716.09,269.09L146.25,647.43"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(146.24936562861672,647.4267365769774) rotate(-33.58131568332208)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M751.98,260.64L1319.07,281.53"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1319.0671506450392,281.5331025053178) rotate(182.1098570542119)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M747.18,269.77L1104.61,538.53"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1104.6132230177532,538.5297493675596) rotate(216.94069105557173)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1143.68,553.69L1864.37,666.63"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1864.3666184154583,666.6336506710321) rotate(188.906804697676)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1129.53,565.42L1267.78,993.29"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1267.7750978825186,993.2927010427434) rotate(252.0940051633947)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1140.65,559.31L1696.88,881.45"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1696.876898140371,881.4528360123714) rotate(210.07730431884136)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1113.81,870.90L1864.97,675.44"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1864.9728162146243,675.4430033430573) rotate(165.41507969525514)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1109.69,885.13L1255.88,999.74"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1255.8843070657285,999.7362115399809) rotate(218.09357214180326)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1114.65,875.71L1693.01,891.41"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1693.011166127483,891.408829005859) rotate(181.555129123803)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1191.55,1149.01L1262.61,1029.61"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1262.6087168448714,1029.6138879472003) rotate(120.75991650052515)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1199.26,1154.61L1696.16,901.59"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1696.1609924256832,901.5920903922862) rotate(153.01532158028368)"></path></g><g class="path" style="cursor: move;"><path stroke="black" stroke-width="1.5" fill="none" d="M1729.16,879.55L1874.51,686.18"></path><path stroke="black" stroke-width="1.5" fill="white" class="arrowfront" d="M-1,0L15,5L15,-5Z" transform="translate(1874.5083958871107,686.175929261191) rotate(126.93127502866375)"></path></g><g transform="translate(272.9359262409003,346.16117874465186)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#ff7777" stroke="#ff7777"></path><rect class="textbg" fill="#ffffff" width="163.8515625" height="17" x="-82.375" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Area-Level Deprivation</text></g><g transform="translate(126,659)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#bed403" stroke="#000000"></path><rect class="textbg" fill="#ffffff" width="124.3046875" height="17" x="-62.1015625" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">FNP Participation</text><path d="M-4,-6L7,0L-4,6Z" fill="#000000"></path></g><g transform="translate(1889,670)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#00a2e0" stroke="#000000"></path><rect class="textbg" fill="#ffffff" width="185.2265625" height="17" x="-92.28125" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Low birthweight (&lt;2,500g)</text><path d="M-2,-6L2,-6L2,6L-2,6Z" fill="#000000"></path></g><g transform="translate(1344.046606215757,282.33484240924287)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#ffffff" stroke="#000000"></path><rect class="textbg" fill="#ffffff" width="94.3828125" height="17" x="-47.140625" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Maternal Age</text></g><g transform="translate(653,98)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#ff7777" stroke="#ff7777"></path><rect class="textbg" fill="#ffffff" width="128.1640625" height="17" x="-63.5859375" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Maternal Ethnicity</text></g><g transform="translate(1275.0909830414103,1012.381532394417)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#dddddd" stroke="#aaaaaa"></path><rect class="textbg" fill="#ffffff" width="235.4375" height="17" x="-117.3828125" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Maternal Health (Pre-Pregnancy)</text></g><g transform="translate(521.1761696685495,828.8148791322488)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#ffffff" stroke="#000000"></path><rect class="textbg" fill="#ffffff" width="259.7890625" height="17" x="-129.3984375" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Maternal Nutrition During Pregnancy</text></g><g transform="translate(732,260)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#ff7777" stroke="#ff7777"></path><rect class="textbg" fill="#ffffff" width="509.390625" height="17" x="-254.359375" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Maternal educational level (General Certificate of Secondary Education)</text></g><g transform="translate(1124,551)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#ffffff" stroke="#000000"></path><rect class="textbg" fill="#ffffff" width="153.9609375" height="17" x="-76.484375" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Prenatal Care Quality</text></g><g transform="translate(1094.6571024018688,875.2340328307281)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#00a2e0" stroke="#00a2e0"></path><rect class="textbg" fill="#ffffff" width="327.390625" height="17" x="-163.1953125" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Smoking or Substance Use During Pregnancy</text></g><g transform="translate(1182.0008917560415,1162.1888011486)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#00a2e0" stroke="#00a2e0"></path><rect class="textbg" fill="#ffffff" width="318.484375" height="17" x="-158.7421875" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">Unplanned admission for maltreatment/injury</text></g><g transform="translate(1718,892)" style="cursor: move; touch-action: none;"><path fill-opacity="0.7" stroke-width="2" z-index="1" d="M 0 0 m 20, 0 a 20,15 0 1,1 -40,0 a 20,15 0 1,1 40,0" fill="#00a2e0" stroke="#00a2e0"></path><rect class="textbg" fill="#ffffff" width="90.796875" height="17" x="-45.3515625" y="21"></rect><text class="nodelabel" y="35" text-anchor="middle">preterm birth</text></g></svg></div>
+
+</main>
+
+<aside>
+
+   <div id="llegend">
+
+    <h3 onclick="displayToggle(&#39;variable&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_variable">
+        Variable</h3>
+   <div id="variable" style="display: block;">
+
+      <form autocomplete="off">
+    <p>
+        <span id="variable_label" style="font-weight:bold">Maternal Ethnicity</span>
+    </p>
+      <p><input type="checkbox" checked="checked" id="variable_exposure" onclick="GUI.set_variable_status(&#39;source&#39;,this.checked)">
+            <label for="variable_exposure">exposure</label></p>
+      <p><input type="checkbox" checked="checked" id="variable_outcome" onclick="GUI.set_variable_status(&#39;target&#39;,this.checked)">
+            <label for="variable_outcome">outcome</label></p>
+      <p><input type="checkbox" checked="checked" id="variable_adjusted" onclick="GUI.set_variable_status(&#39;adjustedNode&#39;,this.checked)">
+            <label for="variable_adjusted">adjusted</label></p>
+      <p><input type="checkbox" checked="checked" id="variable_selected" onclick="GUI.set_variable_status(&#39;selectedNode&#39;,this.checked)">
+            <label for="variable_selected">selected</label></p>
+      <p><input type="checkbox" checked="checked" id="variable_unobserved" onclick="GUI.set_variable_status(&#39;latentNode&#39;,this.checked)">
+            <label for="variable_unobserved">unobserved</label></p>
+
+    <input type="hidden" id="variable_id" value="Maternal Ethnicity">
+
+    <p>
+        <button type="button" onclick="DAGittyControl.deleteVertex(document.getElementById(&#39;variable_id&#39;).value)">delete</button>
+        <button type="button" onclick="DAGittyControl.getView().renameVertexDialog(document.getElementById(&#39;variable_id&#39;).value)">rename</button>
+    </p>
+
+      </form>
+
+
+
+   </div>
+   
+  
+   <h3 onclick="displayToggle(&#39;viewmode&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_view">
+        View mode</h3>
+   <div id="viewmode" style="display:block">
+
+      <form autocomplete="off">
+      <p><input type="radio" checked="checked" id="dagview_normal" name="dagview" onclick="GUI.set_view_mode(this.value)" value="normal"> 
+            <label for="dagview_normal">normal</label></p>
+      <p><input type="radio" name="dagview" id="dagview_moral" onclick="GUI.set_view_mode(this.value)" value="moral">
+            <label for="dagview_moral">moral graph</label></p>
+      <p><input type="radio" name="dagview" id="dagview_dependency" onclick="GUI.set_view_mode(this.value)" value="dependency">
+            <label for="dagview_dependency">correlation graph</label></p>
+      <p><input type="radio" name="dagview" id="dagview_equivalence" onclick="GUI.set_view_mode(this.value)" value="equivalence">
+            <label for="dagview_equivalence">equivalence class</label></p>
+      </form>
+
+   </div>
+   
+   <h3 onclick="displayToggle(&#39;effects&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_effects"> Effect analysis</h3>
+   <div id="effects" style="display:block">
+      <form autocomplete="off">
+      <p><input type="checkbox" id="highlight_puredirect" onclick="GUI.set_highlight_puredirect(this.checked)">
+            <label for="highlight_puredirect">atomic direct effects</label></p>
+      </form>
+   </div>
+
+   <h3 onclick="displayToggle(&#39;dagstyle&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_dagstyle">
+        Diagram style</h3>
+   <div id="dagstyle" style="display:block">
+      <form autocomplete="off">
+      <p><input type="radio" checked="checked" id="dagstyle_original" name="dagstyle" onclick="GUI.set_style(&#39;original&#39;)"> 
+            <label for="dagstyle_original">classic</label></p>
+      <p><input type="radio" name="dagstyle" id="dagstyle_semlike" onclick="GUI.set_style(&#39;semlike&#39;)">
+            <label for="dagstyle_semlike">SEM-like</label></p>
+      </form>
+   </div>
+
+   <h3 onclick="displayToggle(&#39;coloring&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_coloring"> Coloring</h3>
+   <div id="coloring" style="display:block">
+      <form autocomplete="off">
+      <p><input type="checkbox" checked="checked" id="highlight_causal" onclick="GUI.set_highlight_causal(this.checked)">
+            <label for="highlight_causal">causal paths</label></p>
+      <p><input type="checkbox" checked="checked" id="highlight_biasing" onclick="GUI.set_highlight_biasing(this.checked)">
+            <label for="highlight_biasing">biasing paths</label></p>
+      <p><input type="checkbox" checked="checked" id="highlight_ancestral" onclick="GUI.set_highlight_ancestors(this.checked)">
+            <label for="highlight_ancestral">ancestral structure</label></p>
+      </form>
+   </div>
+
+
+
+   <h3 onclick="displayToggle(&#39;legend&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_legend"> Legend</h3>
+   <div id="legend" style="display:block">
+      <p>
+        <img id="liexposure" src="./DAGitty v3.1_files/exposure.png" alt="">
+        exposure
+      </p>
+      <p>
+        <img id="lioutcome" src="./DAGitty v3.1_files/outcome.png" alt="">
+         outcome
+      </p>
+      <div id="legend_ancestors" style="display: block;">
+      <p>
+         <img id="lilnode" src="./DAGitty v3.1_files/lnode.png" alt="">
+         ancestor of exposure
+      </p>
+      <p>
+        <img id="lirnode" src="./DAGitty v3.1_files/rnode.png" alt="">
+         ancestor of outcome
+      </p>
+      <p>
+        <img id="limnode" src="./DAGitty v3.1_files/mnode.png" alt="">
+        ancestor of exposure <em>and</em> outcome
+      </p> 
+      </div>
+      <p>
+        <img id="liadjustednode" src="./DAGitty v3.1_files/adjustednode.png" alt="">
+        adjusted variable
+      </p>
+      <p>
+        <img id="lilatentnode" src="./DAGitty v3.1_files/latentnode.png" alt="">
+        unobserved (latent)
+      </p>
+      <p>
+        <img id="liother" src="./DAGitty v3.1_files/other.png" alt="">
+         other variable
+      </p>
+      <p id="legend_causal" style="display: block;">
+        <img id="licausalpath" src="./DAGitty v3.1_files/causalpath.png" alt="">
+        causal path
+      </p>
+      <p id="legend_biasing" style="display: block;">
+        <img id="libiasingpath" src="./DAGitty v3.1_files/biasingpath.png" alt="">
+        biasing path
+      </p>
+   </div>
+
+  </div>
+
+
+   <div id="rlegend">
+        <h3 onclick="displayToggle(&#39;causal_effect_block&#39;)">
+            <img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_causal_effect">
+            Causal effect identification
+        </h3>
+
+    <div id="causal_effect_block">
+        <p>
+            <select id="causal_effect_kind" onchange="causalEffectEstimates(this.value)">
+                <option value="adj_total">Adjustment (total effect)</option>
+                <option value="adj_causalodds">Adjustment (causal odds ratio)</option>
+                <option value="adj_direct">Adjustment (direct effect)</option>
+                <option value="instrument">Instrumental variable</option>
+                <!--<option value="treeid">TreeId</option>-->
+            </select>
+        </p>
+        <div id="causal_effect" style="display:block"><p>Exposure: FNP Participation</p><p>Outcome: Low birthweight (&lt;2,500g)</p><p>Adjusted: Maternal Age,Maternal Nutrition During Pregnancy,Prenatal Care Quality</p><p class="warning">Incorrectly adjusted.</p><p>No adjustment sets found.</p></div>
+    </div>
+
+    <h3 onclick="displayToggle(&#39;testable_implications&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_testable_implications">  Testable implications</h3>
+
+    <div id="testable_implications" style="display:block"><p>The model implies the following conditional independences: </p><ul><li>Area-Level Deprivation ⊥ FNP Participation | Maternal Age, Maternal educational level (General Certificate of Secondary Education)</li><li>Area-Level Deprivation ⊥ FNP Participation | Maternal Ethnicity, Maternal educational level (General Certificate of Secondary Education)</li><li>Area-Level Deprivation ⊥ Low birthweight (&lt;2,500g) | FNP Participation, Maternal Age, Maternal Nutrition During Pregnancy, Prenatal Care Quality</li><li>Area-Level Deprivation ⊥ Low birthweight (&lt;2,500g) | FNP Participation, Maternal Ethnicity, Maternal Nutrition During Pregnancy, Maternal educational level (General Certificate of Secondary Education), Prenatal Care Quality</li><li>Area-Level Deprivation ⊥ Maternal Age | Maternal Ethnicity, Maternal educational level (General Certificate of Secondary Education)</li><li>Area-Level Deprivation ⊥ Maternal Ethnicity</li><li>Area-Level Deprivation ⊥ Smoking or Substance Use During Pregnancy</li><li>Area-Level Deprivation ⊥ Unplanned admission for maltreatment/injury</li><li>Area-Level Deprivation ⊥ preterm birth | Maternal Nutrition During Pregnancy, Prenatal Care Quality</li></ul><p><a href="javascript:void(0)" onclick="displayImplicationInfo( true )">Show all ...</a></p></div>
+
+    <h3 onclick="displayToggle(&#39;model_data&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_model_data">  Model code</h3>
+    <div id="model_data" style="display: block;">
+      <form name="model_data_frm">
+      <textarea rows="10" cols="35" name="adj_matrix" id="adj_matrix" onkeydown="if(this.value != Model.dag_model_text_data){ displayShow(&#39;model_refresh&#39;);this.style.backgroundColor=&#39;#fec&#39;; }" style="background-color: rgb(255, 238, 204);"></textarea>
+      </form>
+      <p id="model_refresh" style="display: block;">You have modified the model code. To
+      draw the modified model, click here: <button onclick="loadDAGFromTextData()">Update DAG</button></p>
+    </div>
+
+   <h3 onclick="displayToggle(&#39;summary&#39;)"><img src="./DAGitty v3.1_files/arrow-down.png" alt="" id="a_summary"> Summary</h3>
+   <div id="summary" style="display:block">
+      <div id="info_cycle" style="display: none;"> </div>
+      <table id="info_summary" style="display: block;">
+         <tbody><tr><td>exposure(s)</td><td class="info" id="info_exposure">FNP Participation</td></tr>
+         <tr><td>outcome(s)</td><td class="info" id="info_outcome">Low birthweight (&lt;2,500g)</td></tr>
+         <tr><td>covariates</td><td class="info" id="info_covariates">10</td></tr>
+         <tr><td>causal paths</td><td class="info" id="info_frontdoor">5</td></tr>
+      </tbody></table>
+   </div>
+
+   </div>
+
+</aside><div id="goog-gt-tt" class="VIpgJd-yAWNEb-L7lbkb skiptranslate" style="border-radius: 12px; margin: 0 0 0 -23px; padding: 0; font-family: &#39;Google Sans&#39;, Arial, sans-serif;" data-id=""><div id="goog-gt-vt" class="VIpgJd-yAWNEb-hvhgNd"><div class=" VIpgJd-yAWNEb-hvhgNd-l4eHX-i3jM8c"><img src="./DAGitty v3.1_files/24px.svg" width="24" height="24" alt=""></div><div class=" VIpgJd-yAWNEb-hvhgNd-k77Iif-i3jM8c"><div class="VIpgJd-yAWNEb-hvhgNd-IuizWc" dir="ltr">Original text</div><div id="goog-gt-original-text" class="VIpgJd-yAWNEb-nVMfcd-fmcmS VIpgJd-yAWNEb-hvhgNd-axAV1"></div></div><div class="VIpgJd-yAWNEb-hvhgNd-N7Eqid ltr"><div class="VIpgJd-yAWNEb-hvhgNd-N7Eqid-B7I4Od ltr" dir="ltr"><div class="VIpgJd-yAWNEb-hvhgNd-UTujCb">Rate this translation</div><div class="VIpgJd-yAWNEb-hvhgNd-eO9mKe">Your feedback will be used to help improve Google Translate</div></div><div class="VIpgJd-yAWNEb-hvhgNd-xgov5 ltr"><button id="goog-gt-thumbUpButton" type="button" class="VIpgJd-yAWNEb-hvhgNd-bgm6sf" title="Good translation" aria-label="Good translation" aria-pressed="false"><span id="goog-gt-thumbUpIcon"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M21 7h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 0S7.08 6.85 7 7H2v13h16c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73V9c0-1.1-.9-2-2-2zM7 18H4V9h3v9zm14-7l-3 7H9V8l4.34-4.34L12 9h9v2z"></path></svg></span><span id="goog-gt-thumbUpIconFilled"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M21 7h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 0S7.08 6.85 7 7v13h11c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73V9c0-1.1-.9-2-2-2zM5 7H1v13h4V7z"></path></svg></span></button><button id="goog-gt-thumbDownButton" type="button" class="VIpgJd-yAWNEb-hvhgNd-bgm6sf" title="Poor translation" aria-label="Poor translation" aria-pressed="false"><span id="goog-gt-thumbDownIcon"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M3 17h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 24s7.09-6.85 7.17-7h5V4H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2zM17 6h3v9h-3V6zM3 13l3-7h9v10l-4.34 4.34L12 15H3v-2z"></path></svg></span><span id="goog-gt-thumbDownIconFilled"><svg width="24" height="24" viewBox="0 0 24 24" focusable="false" class="VIpgJd-yAWNEb-hvhgNd-THI6Vb NMm5M"><path d="M3 17h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 24s7.09-6.85 7.17-7V4H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2zm16 0h4V4h-4v13z"></path></svg></span></button></div></div><div id="goog-gt-votingHiddenPane" class="VIpgJd-yAWNEb-hvhgNd-aXYTce"><form id="goog-gt-votingForm" action="https://translate.googleapis.com/translate_voting?client=te_lib" method="post" target="votingFrame" class="VIpgJd-yAWNEb-hvhgNd-aXYTce"><input type="text" name="sl" id="goog-gt-votingInputSrcLang"><input type="text" name="tl" id="goog-gt-votingInputTrgLang"><input type="text" name="query" id="goog-gt-votingInputSrcText"><input type="text" name="gtrans" id="goog-gt-votingInputTrgText"><input type="text" name="vote" id="goog-gt-votingInputVote"></form><iframe name="votingFrame" frameborder="0" src="./DAGitty v3.1_files/saved_resource.html"></iframe></div></div></div>
+
+
+
+</body><style>.imu-2c2pafb2hm-highlight{outline: 4px solid yellow !important}</style></html>

@@ -1,0 +1,627 @@
+---
+title: "HDAT9600 Final Team Assignment"
+subtitle: "Submission deadline - 03-May-2024"
+author: "Team 3: Michelle Kim z5161954, Georgina Jacko z5441162, Harvey Lee z , Zhenyu Zhang z  "
+date: "`r Sys.Date()`"
+output: 
+  html_document
+---
+```{r setup, include=FALSE}
+# see the knitr documentation for details
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width=8, fig.height=8)
+
+# List of required packages
+required_packages <- c("boot", "bshazard", "car", "caret", "datadictionary", "DescTools", 
+                       "eha", "dplyr", "finalfit", "flexsurv", "ggplot2", "ggfortify", 
+                       "glmnet", "kableExtra", "knitr", "MASS", "muhaz", "pch", "pROC", 
+                       "ranger", "ROCR", "shiny", "stats", "stringi", "summarytools", 
+                       "survminer", "survival", "tidyr", "tidyverse", "gridExtra", "png")
+
+# Load the packages using the custom function
+
+# Custom function to install and load packages
+load_package <- function(package) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package, repos = "https://cloud.r-project.org")
+    library(package, character.only = TRUE)
+  }
+}
+
+#load associated library's 
+library(boot)
+library(bshazard)
+library(car)
+library(caret)
+library(datadictionary)
+library(DescTools)
+library(eha)
+library(dplyr)
+library(finalfit)
+library(flexsurv)
+library(ggplot2)
+library(ggfortify)
+library(glmnet)
+library(kableExtra)
+library(knitr)
+library(MASS)
+library(muhaz)
+library(pch)
+library(pROC)
+library(ranger)
+library(ROCR)
+library(shiny)
+library(stats)
+library(stringi)
+library(summarytools)
+library(survminer)
+library(survival)
+library(tidyr)
+library(tidyverse)
+library(gridExtra)
+library(png)
+```
+
+``` {r task summary, eval = FALSE, include = FALSE}
+## Instructions can delete prior to submission 
+
+* This assignment is assessed and will count for 30% of the total course marks.
+* The assignment comprises two tasks. The first task will focus on building a model to **PREDICT** an outcome and the second task will focus on using a model to **EXPLAIN** the relationships between a variable of interest and the outcome.
+
+
+The dataframe consists of 120 variables, which are defined as follows:
+
+#### Patient Descriptor Variables
+<li> <em>RecordID:</em>            a unique integer for each ICU stay</li>
+<li> <em>Age:</em>                 years</li>
+<li> <em>Gender:</em>              male/female</li>
+<li> <em>Height:</em>              cm</li>
+<li> <em>ICUType:</em>             Coronary Care Unit; Cardiac Surgery Recovery Unit; Medical ICU; Surgical ICU</li>
+<li> <em>Length_of_stay:</em>      The number of days between the patient’s admission to the ICU and the end of hospitalisation</li>
+<li> <em>Survival:</em>            The number of days between ICU admission and death for patients who died</li>
+
+
+#### Outcome Variables
+<li> <em>in_hospital_death:</em>   0:survivor/1:died in-hospital **this is the outcome variable for Task 1: Logistic Regression**</li>
+<li> <em>Status:</em>              True/False **this is the censoring variable for Task 2: Survival Analysis**</li>
+<li> <em>Days:</em>                Length of survival (in days) **this is the survival time variable for Task 2: Survival Analysis**</li>
+
+
+#### Clinical Variables
+<em>Use the hyperlinks below to find out more about the clinical meaning of each variable.</em>
+The first two clinical variables are summary scores that are used to assess patient condition and risk.
+
+* SAPS-I score - Simplified Acute Physiological Score [Le Gall et al., 1984](http://www.ncbi.nlm.nih.gov/pubmed/6499483)
+* SOFA score - Sequential Organ Failure Assessment [Ferreira et al., 2001](http://www.ncbi.nlm.nih.gov/pubmed/11594901)
+
+###
+
+The following 36 clinical measures were assessed at multiple timepoints during each patients ICU stay. For each of the 36 clinical measures, you are given 3 summary variables: a) The minimum value during the first 24 hours in ICU (_min), b) The maximum value during the first 24 hours in ICU (_max), and c) The difference between the mean and the most extreme values during the first 24 hours in ICU (_diff). For example, for the clinical measure Cholesterol, these three variables are labelled 'Cholesterol_min', 'Cholesterol_max', and 'Cholesterol_diff'.
+
+* [Albumin](http://en.wikipedia.org/wiki/Human_serum_albumin)
+ (g/dL)
+* [ALP](http://en.wikipedia.org/wiki/Alkaline_phosphatase)
+ [Alkaline phosphatase (IU/L)]
+* [ALT](http://en.wikipedia.org/wiki/Alanine_transaminase)
+ [Alanine transaminase (IU/L)]
+* [AST](http://en.wikipedia.org/wiki/Aspartate_transaminase)
+ [Aspartate transaminase (IU/L)]
+* [Bilirubin](http://en.wikipedia.org/wiki/Bilirubin)
+ (mg/dL)
+* [BUN](http://en.wikipedia.org/wiki/BUN)
+ [Blood urea nitrogen (mg/dL)]
+* [Cholesterol](http://en.wikipedia.org/wiki/Cholesterol)
+ (mg/dL)
+* [Creatinine](http://en.wikipedia.org/wiki/Serum_creatinine#Plasma_creatinine)
+ [Serum creatinine (mg/dL)]
+* [DiasABP](http://en.wikipedia.org/wiki/Diastolic_blood_pressure)
+ [Invasive diastolic arterial blood pressure (mmHg)]
+* [FiO2](http://en.wikipedia.org/wiki/FIO2)
+ [Fractional inspired O<sub>2</sub> (0-1)]
+* [GCS](http://en.wikipedia.org/wiki/Glasgow_coma_score)
+ [Glasgow Coma Score (3-15)]
+* [Glucose](http://en.wikipedia.org/wiki/Serum_glucose)
+ [Serum glucose (mg/dL)]
+* [HCO3](http://en.wikipedia.org/wiki/Bicarbonate#Diagnostics)
+ [Serum bicarbonate (mmol/L)]
+* [HCT](http://en.wikipedia.org/wiki/Hematocrit)
+ [Hematocrit (%)]
+* [HR](http://en.wikipedia.org/wiki/Heart_rate)
+ [Heart rate (bpm)]
+* [K](http://en.wikipedia.org/wiki/Hypokalemia)
+ [Serum potassium (mEq/L)]
+* [Lactate](http://en.wikipedia.org/wiki/Lactic_acid)
+ (mmol/L)
+* [Mg](http://en.wikipedia.org/wiki/Magnesium#Biological_role)
+ [Serum magnesium (mmol/L)]
+* [MAP](http://en.wikipedia.org/wiki/Mean_arterial_pressure)
+ [Invasive mean arterial blood pressure (mmHg)]
+* [MechVent](http://en.wikipedia.org/wiki/Mechanical_ventilation)
+ [Mechanical ventilation respiration (0:false, or 1:true)]
+* [Na](http://en.wikipedia.org/wiki/Serum_sodium)
+ [Serum sodium (mEq/L)]
+* [NIDiasABP](http://en.wikipedia.org/wiki/Diastolic_blood_pressure)
+ [Non-invasive diastolic arterial blood pressure (mmHg)]
+* [NIMAP](http://en.wikipedia.org/wiki/Mean_arterial_pressure)
+ [Non-invasive mean arterial blood pressure (mmHg)]
+* [NISysABP](http://en.wikipedia.org/wiki/Systolic_blood_pressure)
+ [Non-invasive systolic arterial blood pressure (mmHg)]
+* [PaCO2](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [partial pressure of arterial CO<sub>2</sub> (mmHg)]
+* [PaO2](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [Partial pressure of arterial O<sub>2</sub> (mmHg)]
+* [pH](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [Arterial pH (0-14)]
+* [Platelets](http://en.wikipedia.org/wiki/Platelets)
+ (cells/nL)
+* [RespRate](http://en.wikipedia.org/wiki/Respiratory_physiology)
+ [Respiration rate (bpm)]
+* [SaO2](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [O<sub>2</sub> saturation in hemoglobin (%)]
+* [SysABP](http://en.wikipedia.org/wiki/Systolic_blood_pressure)
+ [Invasive systolic arterial blood pressure (mmHg)]
+* [Temp](http://en.wikipedia.org/wiki/Normal_human_body_temperature)
+ [Temperature (&deg;C)]
+* [TropI](http://en.wikipedia.org/wiki/Troponin)
+ [Troponin-I (&mu;g/L)]
+* [TropT](http://en.wikipedia.org/wiki/Troponin)
+ [Troponin-T (&mu;g/L)]
+* [Urine](http://en.wikipedia.org/wiki/Fluid_balance)
+ [Urine output (mL)]
+* [WBC](http://en.wikipedia.org/wiki/Reference_ranges_for_blood_tests#Hematology)
+ [White blood cell count (cells/nL)]
+* Weight (kg)
+
+
+## Aims of your project
+
+You have two analytic goals in this assignment. 
+1. The first goal (Task 1) is to build a model to PREDICT in-hospital death. The context for this is that the hospital management wishes to use this model to prioritise the allocation of resources with the overarching aim of improving patient survival.  
+2. The second goal (Task 2) is to try to understand and EXPLAIN how survival varies by `Age`. How does survival change with increasing Age? Are age-related survival differences explained solely by differing clinical characteristics of patients? 
+
+``` 
+
+```{r instructions 1A, eval = FALSE, include = FALSE}
+
+Conduct a brief EDA for the dataset `icu_patients_df1`. One of your goals for this EDA should be to identify a sub-set of variables (approx 15-20 variables) that _may_ be useful predictors of survival and/or relevant to your analytical task. You may wish to firstly undertake a brief literature review to try to identify factors that may be important predictors of survival in an ICU. This doesnt need to be in-depth, but enough to get a basic idea of what the variables are measuring and which variables might, in theory, be most important. 
+
+For the 15-20 chosen variables, present enough information to: (i) explain why you selected these variables, based on a combination of your literature review and EDA, and (ii) Provide an overview of the variables and how they are related to `in-hospital death`. Present your summary using tables and/or plots with supporting commentary where relevant. 
+
+```
+
+```{r task0 read and check, include=FALSE}
+mydat <- file.path("C:/Users/froze/OneDrive/Documents/2.1 UNSW bioinfo/HDAT9600/Assignment/Group/HDAT9600_Assign4_GroupProject")
+icu_patients_df0 <- readRDS(file.path(mydat,"icu_patients_df0.rds"))
+icu_patients_df1 <- readRDS(file.path(mydat,"icu_patients_df1.rds"))
+
+#summary(icu_patients_df1) #useful for initial checks
+#str(icu_patients_df1) # Structure of the dataset
+#glimpse(icu_patients_df1) #quickly see the entirety of the data frame's structure and less likely to truncate
+
+# Function to calculate and print missing, NaN, infinite values, and unique patient counts
+analyze_data_issues <- function(df, df_name) {
+  # Calculate missing values
+  missing_values <- colSums(is.na(df))
+  missing_values <- missing_values[missing_values > 0]
+
+  # Calculate NaN and infinite values
+  nan_inf_values <- sapply(df, function(x) sum(is.nan(x) | is.infinite(x)))
+  nan_inf_values <- nan_inf_values[nan_inf_values > 0]
+
+  # Calculate unique patient counts
+  unique_patients <- length(unique(df$RecordID))
+
+  # Print the results
+  cat("\n---", df_name, "---\n")
+  cat("\nMissing Values:\n")
+  print(missing_values)
+  cat("\nNaN or Infinite Values:\n")
+  print(nan_inf_values)
+  cat("\nNumber of Unique Patients:\n")
+  print(unique_patients)
+}
+
+# Apply the function to both data frames
+analyze_data_issues(icu_patients_df0, "ICU Patients DF0")
+analyze_data_issues(icu_patients_df1, "ICU Patients DF1")
+```
+# Data Summary 
+## Missing Values
+
+
+There were `r unique_patients` and unique patients who contributed to the data set, `r sum(icu_patients_df1_cleaned$Gender == "Male")` (`r (round(sum(icu_patients_df1_cleaned$Gender == "Male")/length(unique(icu_patients_df1_cleaned$RecordID)),2))*100`%) were male and the average age was `r floor(median(icu_patients_df1_cleaned$Age))` (IQR: `r paste(round(quantile(icu_patients_df1_cleaned$Age, probs = 0.25),1))` - `r paste(round(quantile(icu_patients_df1_cleaned$Age, probs = 0.75),1))`) years old. 
+
+**`r sum(icu_patients_df1$in_hospital_death == 1)`** of the patients died during their hospital admission. 
+
+
+**Variables with values outside of plausible clinical ranges or logically incorrect were cleaned with imputation of median values**
+
+- `SOFA` should not be negative  
+- `Length_of_stay` should not be less than 2 given dataset contains stays greater than 48 hours
+- `Weight` absurd weight differences and extremely high values 
+
+**Variables with Missing Data:**
+
+- `SAPS1`: `r sum(is.na(icu_patients_df1_conv$SAPS))` missing values (`r round((sum(is.na(icu_patients_df1_conv$SAPS))/length(icu_patients_df1_conv$SAPS))*100,2)`% missing) - This is a relatively small proportion of the dataset. Since SAPS-I is an important score for ICU prognosis, it worth imputing these values rather than excluding the variable.
+
+- Blood pressure-related variables (`DiasABP_diff`, `DiasABP_max`, `DiasABP_min`, `NIDiasABP_diff`, `NIDiasABP_max`, `NIDiasABP_min`, `NIMAP_diff`, `NIMAP_max`, `NIMAP_min`, `NISysABP_diff`, `NISysABP_max`, `NISysABP_min`, `SysABP_diff`, `SysABP_max`, `SysABP_min`): All these have a high degree of missingness. Since these are many related variables with substantial missing data, we therefore considered only MAP, given the complete information.
+
+- `Height`: `r sum(is.na(icu_patients_df1_conv$Height))` missing values (`r round((sum(is.na(icu_patients_df1_conv$Height))/length(icu_patients_df1_conv$Height))*100,2)`% missing) - given the high rate of missing values, and low probability of importance to clinical outcome it has been excluded
+
+- Weight-related variables (`Weight_diff`, `Weight_max`, `Weight_min`): `r sum(is.na(icu_patients_df1_conv$Weight_diff))` missing values (`r round((sum(is.na(icu_patients_df1_conv$Weight_diff))/length(icu_patients_df1_conv$Weight_diff))*100,2)`% missing) - Given this is a smaller proportion of missing data and weight is possibly an important variable for analysis it may be worth imputing values.
+
+**Variables to be excluded due to high missing data:** `r vars_to_exclude`
+
+**Remaining total missing values in the cleaned data:** `r missing_values`
+```{r, fig.height=5, fig.width=8, echo=FALSE}
+par(mfrow= c(1,2))
+
+# Produce a boxplot showing distribution of age for survivor and in-hospital death patients
+boxplot(icu_patients_df1$Age~icu_patients_df1$in_hospital_death, ylab= "Age (years)", xlab="Survival Outcome", main="Distribution of Age 
+        by Survivor Status")
+
+# Produce a boxplot showing distribution of height for survivor and in-hospital death patients
+boxplot(icu_patients_df1$Height~icu_patients_df1$in_hospital_death, ylim=c(100, 200), ylab= "Height (cm)", xlab="Survival Outcome", main="Distribution of Height 
+        by Survivor Status")
+
+par(mfrow= c(1,1))
+```
+```{r, fig.width=6, fig.height=5, echo=FALSE}
+# Group by each gender and calculate total survivors and in-hospital deaths
+grouped <-  icu_patients_df1%>% 
+  group_by(Gender) %>% 
+  summarise(Survivor = sum(in_hospital_death==0), hospital_death = sum(in_hospital_death==1), .groups= 'keep') %>%
+  # Reshape data for ggplot
+  pivot_longer(cols = c(Survivor, hospital_death),
+               names_to = "Group", 
+               values_to = "Count")
+
+# Plot stacked bar plot showing proportion of survivors and in-hospital deaths by gender
+ggplot(grouped, aes(x = Gender, y = Count, fill = Group)) +
+  geom_bar(position="fill", stat = "identity") +
+  labs(x = "ICU Type", y = "Proportion", title = "Proportion of Survivors and Hospital Deaths by Gender", fill= "Legend")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Group by each ICU Type and calculate total survivors and in-hospital deaths
+grouped <-  icu_patients_df1%>% 
+  group_by(ICUType) %>% 
+  summarise(Survivor = sum(in_hospital_death==0), hospital_death = sum(in_hospital_death==1), .groups= 'keep') %>%
+  # Reshape data for ggplot
+  pivot_longer(cols = c(Survivor, hospital_death),
+               names_to = "Group", 
+               values_to = "Count")
+
+# Plot stacked bar plot showing proportion of cases and controls by age group
+ggplot(grouped, aes(x = ICUType, y = Count, fill = Group)) +
+  geom_bar(position="fill", stat = "identity") +
+  labs(x = "ICU Type", y = "Proportion", title = "Proportion of Survivors and Hospital Deaths by ICU Type", fill= "Legend")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+```{r, fig.height=5, fig.width=8, echo=FALSE}
+par(mfrow= c(1,2))
+
+# Produce a boxplot showing distribution of SAPS1 score for survivor and in-hospital death patients
+boxplot(icu_patients_df1$SAPS1~icu_patients_df1$in_hospital_death, ylab= "SAPS1 score", xlab="Survival Outcome", main="Distribution of SAPS1
+        by Survivor Status")
+
+# Produce a boxplot showing distribution of SOFA score for survivor and in-hospital death patients
+boxplot(icu_patients_df1$SOFA~icu_patients_df1$in_hospital_death, ylab= "SOFA score", xlab="Survival Outcome", main="Distribution of SOFA
+        by Survivor Status")
+
+par(mfrow= c(1,1))
+```
+
+Survival in a hospital ICU is influenced by numerous factors. Older age is often associated with a higher risk of death in an ICU, and this is supported by the box plot showing a notable difference in the distribution of age for survivor and in-hospital death patients. However, the box plot for height indicates there is no significant difference in the distribution of height for survivor and in-hospital death patients, and there is currently no evidence that height or gender has any impact in the outcome of an ICU hospital stay, collectively suggesting this variable is not a useful predictor. While the stacked bar plot for gender shows very similar proportions of survivors/in-hospital deaths for each gender, suggesting it is also not a useful predictor, the stacked bar plot for ICU type showed notably different proportions of survivors/in-hospital deaths per ICU type, with a significantly higher chance of survival in the cardiac surgery recovery unit, suggesting it may have some value as a predictor. The box-plots for SAPS1 and SOFA support that these two variables will be useful predictors by showing that there is a notable difference in the distribution of both SAPS1 and SOFA scores between survivor and in-hospital death patients. 
+
+Clinical measures are also important in predicting ICU survival, as they can reflect an aspect of the overall condition of a patient. For example, of the 36 clinical measures collected in the dataset, 
+
+Respiratory function is captured by PaO2, FiO2 and RespRate
+Coagulation & blood is captured by Platelets, pH and Glucose
+Liver function is captured by Bilirubin, Albumin, ALP, ALT, AST
+Cardiovascular system is captured by HR, MAP, TroponinI, TroponinT, Lactate
+Central nervous system is captured by GCS 
+Renal function is captured by Creatinine, Urine 
+Immune system is captured by Temp, WBC
+
+Each of the 36 clinical measures in the dataset are captured by 3 variables, the minimum value during the first 24 hours in ICU (_min), the maximum value during the first 24 hours in ICU (_max), and the difference between the mean and the most extreme values during the first 24 hours in ICU (_diff). Furthermore, systolic, diastolic and mean arterial blood pressure were measured through both invasive and non-invasive measures. As logistic regression models are based on several assumptions including the assumption of no multicollinearity, which states predictor variables should not be highly correlated with each other, only one of these related variables should be included in the model. Therefore, it is important to determine not only if the clinical measure has a significant effect on the ICU survival outcome, but also which of the related variables is the most representative of this effect and should be included as a predictor. 
+
+Elevated levels of Albumin, AST, Bilirubin, BUN, Creatinine, GCS, Glucose, HCO3, Lactate, respiratory rate and urine output are significant predictors of death in an ICU hospital, so the max variables of these clinical measures should be chosen as potential predictors. On the other hand, sudden large changes in heart rate, Na, pH, temperature and non-invasive systolic blood pressure have been found to have a strong association with ICU death, so the _diff variables should be chosen. As these variables capture the wellness of different body functions, they collectively reflect the overall wellbeing of the patient and hence may be used to predict the likelihood of death in an ICU hospital. 
+
+Therefore, the most useful predictors of survival in an ICU hospital may be the following: 
+
+1. Age 2. ICU Type 3. SAPS1 4. SOFA 5. Albumin_max 6. AST_max 7. Bilirubin_max 8. BUN_max 9. Creatinine_max 10. GCS_max 11. Glucose_max 12. HCO3_max 13. HR_diff 14. Lactate_max 15. Na_diff 16. pH_diff 17. RespRate_max 18. Temp_diff 19. Urine_max 20. NISysABP_diff
+
+This is supported by the results of fitting univariable models with each of these variables as the only predictor. The p-values are very low (less than 0.001), suggesting the null hypotheses that each of these variables have no effect on the outcome in_hospital_death can be rejected, and hence that these variables may be significant predictors for survival. 
+
+```{r, echo=FALSE, results="hide"}
+# List of variables to fit models for
+variables <- c("SAPS1", "SOFA", "Albumin_max", "AST_max", "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "Glucose_max", "HCO3_max", "HR_diff", "Lactate_max", "Na_diff", "pH_diff", "RespRate_max", "Temp_diff", "Urine_max", "NISysABP_diff")
+
+# Function to fit binomial GLM for a variable
+fit_model <- function(var_name) {
+  glm(formula = paste("in_hospital_death ~", var_name), family = binomial(link = "logit"), data = icu_patients_df1)
+}
+# Fit models for each variable
+models <- lapply(variables, fit_model)
+
+# Extract p-values for each variable
+p_values <- lapply(models, function(model) {
+  summary(model)$coef[, "Pr(>|z|)"]
+})
+# Print the results
+print(p_values)
+```
+
+# TASK 1B
+
+```{r, echo=TRUE, results="hide"}
+# Compute correlation coefficients between pairs of these continuous variables
+cor(icu_patients_df1[, c("SAPS1", "SOFA", "Albumin_max", "AST_max", "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "Glucose_max", "HCO3_max", "HR_diff", "Lactate_max", "Na_diff", "pH_diff", "RespRate_max", "Temp_diff", "Urine_max", "NISysABP_diff")])
+```
+Although it is known that SAPS1 and SOFA are calculated from some of the clinical measures, it can be seen from the correlation coefficients above that none of the predictors are highly correlated, so there is no major violation of the assumption of no multicollinearity. 
+
+```{r, echo=TRUE, results="hide"}
+# Fit model using all chosen predictors
+model1 <- glm(in_hospital_death ~ Age+ICUType+SAPS1+SOFA+Albumin_max+AST_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+Glucose_max+HCO3_max+HR_diff+Lactate_max+Na_diff+pH_diff+RespRate_max+Temp_diff+Urine_max+NISysABP_diff, family = binomial, data=icu_patients_df1)
+summary (model1)
+
+```
+
+```{r}
+# Find reduced model using step()
+model2 <- step(model1,direction="both", trace=0)
+summary(model2)
+```
+```{r, echo=TRUE, results="hide"}
+# Fit model removing non-significant predictors in model 2 at 10% significance level
+model3 <- glm(in_hospital_death ~ Age+SAPS1+Albumin_max+AST_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+HR_diff+Urine_max, family = binomial, data=icu_patients_df1)
+summary (model3)
+
+# Fit model removing non-significant predictors in model 2 at 5% significance level
+model4 <- glm(in_hospital_death ~ Age+SAPS1+Albumin_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+Urine_max, family = binomial, data=icu_patients_df1)
+summary (model4)
+```
+Brier score
+```{r, echo=FALSE}
+# Get the predicted probabilities for model 1
+predprob_model1 <- predict(model1, type="response")
+
+# Calculate the mean Brier score for model 1
+Brier_model1 <- mean((predprob_model1 - icu_patients_df1$in_hospital_death)^2)
+Brier_model1
+
+# Get the predicted probabilities for model 2
+predprob_model2 <- predict(model2, type="response")
+
+# Calculate the mean Brier score for model 2
+Brier_model2 <- mean((predprob_model2 - icu_patients_df1$in_hospital_death)^2)
+Brier_model2
+
+# Get the predicted probabilities for model 3
+predprob_model3 <- predict(model3, type="response")
+
+# Calculate the mean Brier score for model 3
+Brier_model3 <- mean((predprob_model3 - icu_patients_df1$in_hospital_death)^2)
+Brier_model3
+
+# Get the predicted probabilities for model 4
+predprob_model4 <- predict(model4, type="response")
+
+# Calculate the mean Brier score for model 4
+Brier_model4 <- mean((predprob_model4 - icu_patients_df1$in_hospital_death)^2)
+Brier_model4
+```
+AUC
+```{r, echo=FALSE}
+# Calculate AUC for model 1
+pred.model1 <- predict(model1, type="response")
+performance(prediction(pred.model1, model1$y), "auc")@y.values
+
+# Calculate AUC for model 2
+pred.model2 <- predict(model2, type="response")
+performance(prediction(pred.model2, model2$y), "auc")@y.values
+
+# Calculate AUC for model 3
+pred.model3 <- predict(model3, type="response")
+performance(prediction(pred.model3, model3$y), "auc")@y.values
+
+# Calculate AUC for model 4
+pred.model4 <- predict(model4, type="response")
+performance(prediction(pred.model4, model4$y), "auc")@y.values
+```
+```{r, echo=FALSE}
+# Calculate PseudoR2 
+options(scipen=999)
+PseudoR2(model1, which = "all")
+PseudoR2(model2, which = "all")
+PseudoR2(model3, which = "all")
+PseudoR2(model4, which = "all")
+```
+Akaike’s Information Criterion (AIC) is useful when comparing models as it takes into account likelihood as well as the number of parameters in the model, which is important to ensure parsimony. As a lower AIC indicates better overall balance between model fit and model simplicity, the summary output suggests that model 2 (1122.9) is preferred over model 1 (1134.5), model 3 (1346.6) and model 4 (1357.5). This is consistent with the area under the curve (AUC) being 0.798365, which is higher than that of model 3 (0.7976692) and model 4 (0.7899311), suggesting it is a superior classifier for in_hospital_death, and it is only slightly lower than the AUC for model 1 (0.7986567), despite being much simpler. The pseudo R-squared test also generally suggest better fit for model 2 than models 3 and 4, and that it is comparable to model 1. However, the Brier score is lower for model 3 (0.1420405) and model 4 (0.1407722) than model 1 (0.1474154) and model 2 (0.1468816), suggesting they have better prediction for the outcome in_hospital_death, but as this difference is very small, model 2 should be chosen as indicated by the notably lower AIC to ensure parsimony. 
+
+The AUC of 0.7984 for our chosen model 2 is considerably higher than 0.5, the value which would suggest no value as a classifier (a random classifier). However, it is also significantly less than 1, suggesting the model is not a perfect classifier. The AUC value of 0.7984 means that, given a random selection of a person who died and survived from the dataset, the model would assign a higher probability to die and hence correctly classify the person who died 79.84% of the time. Therefore, the chosen model (model 2) has value in predicting in_hospital_death, but it must be noted that it is a complex model with potential overfitting which may affect its generalisability and prediction performance when applied to new, unseen datasets.
+
+#### Unimputed data
+Below is a summary of using the unimputed dataset when fitting the same model 
+
+```{r,  unimputed data, echo=FALSE}
+# Missing values assessment of selected factors
+sapply(icu_patients_df0, function(x) sum(is.na(x)))[
+  c("Age", "SAPS1", "Albumin_max", "AST_max", 
+    "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", 
+    "HCO3_max", "HR_diff", "pH_diff", "Urine_max", "NISysABP_diff")
+]
+# Recognise that glm default management of missing values is to omit them
+# Recognise that previous steps omitted missing values for model imputed data
+# Choice to deal with missing values in any dataset: Remove Rows, Impute Missing Values or Exclude variables with missing value
+# In this case, we are specifically dealing with non-imputed dataset, the solution is either to exclude variables or remove rows (all with missing)
+# Remove rows with any missing values in the specified columns
+icu_patients_df0_r_missing_factors <- icu_patients_df0 %>%
+  dplyr::select(Age, SAPS1, Albumin_max, AST_max, Bilirubin_max, BUN_max, Creatinine_max, GCS_max, HCO3_max, HR_diff, pH_diff, RespRate_max, Urine_max, NISysABP_diff, in_hospital_death) %>%
+  na.omit()
+```
+*Note that after removal of missing data, we are down to 29 observations from 2061, which is insufficient for analysis of the required model. It would be better to therefore exclude the variables with significantly missing data as predictors.* In this case, I would start by excluding all variables with > 1000 missing dataset: 
+Therefore, the the following variables should be excluded:
+
+Albumin_max (1353 missing values), AST_max (1255 missing values), Bilirubin_max (1273 missing values)
+
+This brings down the list of variables to: 
+
+Age, SAPS1, GCS_max, HCO3_max, HR_diff, pH_diff, Urine_max, NISysABP_diff, BUN_max, Creatinine_max
+
+```{r, unimputed data model fit, echo=FALSE}
+
+# Attempt again to remove rows with any missing values in the specified columns, this time only addressing the 15 left:
+icu_patients_df0_r_missing_factors <- icu_patients_df0 %>%
+  dplyr::select(Age, SAPS1, Albumin_max, AST_max, Bilirubin_max, BUN_max, Creatinine_max, GCS_max, HCO3_max, HR_diff, pH_diff, Urine_max, NISysABP_diff, in_hospital_death) %>%
+  na.omit()
+
+# Remove further data issues - infite values
+
+# Replace infinite values with NA, only for columns that are numeric
+icu_patients_df0_r_missing_factors[] <- lapply(icu_patients_df0_r_missing_factors, function(x) if(is.numeric(x)) {x[!is.finite(x)] <- NA; return(x)} else x)
+
+# Drop rows with any NA or infinite values again, to ensure data cleanliness
+icu_patients_df0_r_missing_factors <- na.omit(icu_patients_df0_r_missing_factors)
+
+# Fit model 2 again on the dataset without missing values
+model2_unimputed <- glm(in_hospital_death ~ Age + SAPS1 + BUN_max + Creatinine_max + GCS_max + HCO3_max + HR_diff + pH_diff + Urine_max + NISysABP_diff, family = binomial, data = icu_patients_df0_r_missing_factors)
+summary(model2_unimputed)
+```
+INTERPRET DIFFERENCES
+
+# Task 2
+
+```{r}
+# Find number of people per censoring status
+table(icu_patients_df1$Status)
+
+# Find proportion of people per censoring status
+prop.table(table(icu_patients_df1$Status))
+```
+```{r, fig.width=5, fig.height=5, echo=FALSE}
+# Convert Status to number
+icu_patients_df1$Status <- as.numeric (icu_patients_df1$Status)
+
+# Plot follow-up time by censoring status
+ggplot(icu_patients_df1, aes(x = Days, fill = factor(Status), colour = factor(Status)))+ 
+  geom_histogram(alpha=0.6, position='identity', bins=10)+
+  xlab("Follow-up time (days)")+
+  ylab("Frequency")+
+  ggtitle("Histogram of Time until Death/Censoring \nby Censoring Status")
+```
+```{r, fig.width=8, fig.height=5, echo=FALSE}
+# Plot a Kaplan Meier curve for overall survival
+fit_KM <- survfit(Surv((Days/365.25), Status) ~ 1, data = icu_patients_df1) 
+plot(fit_KM, main = "Kaplan-Meier curve for overall dataset", xlab = "Time (years)", ylab= "Proportion surviving",  ylim = c(0.6,1.0))
+```
+
+It may be inferred that the variables which have a significant impact on whether or not a patient dies in an ICU hospital (Age, ICU Type, SAPS1, SOFA, Albumin_max, AST_max, Bilirubin_max, BUN_max, Creatinine_max, GCS_max, Glucose_max, HCO3_max, HR_diff, Lactate_max, Na_diff, pH_diff, RespRate_max, Temp_diff, Urine_max, NISysABP_diff) also has a significant effect on survival time. The analysis below supports this. 
+
+```{r}
+# Fit univariable model to assess significance of Age in survival
+cox.Age <- coxph(Surv(Days,Status)~Age, data=icu_patients_df1)
+summary(cox.Age)
+```
+Univariable model for age shows it is a significant predictor for survival. One year increase in age is associated with 3.41% increased risk of death, and p-value of less than 0.001 and 95% confidence interval not including 1 indicates this observed effect is statistically significant. 
+
+```{r, fig.width=6, fig.height=5, echo=FALSE}
+#Kaplan Meier curve by ICU type 
+fit_ICUtype <- survfit(Surv((Days/365.25),Status) ~ ICUType, data = icu_patients_df1) 
+ggsurvplot(fit_ICUtype, data=icu_patients_df1,  conf.int = TRUE,  censor.size=2, risk.table = FALSE, legend.labs = c("Coronary Care Unit", "Cardiac Surgery Recovery Unit", "Medical ICU", "Surgical ICU"), ylim = c(0.4,1.0),) +
+   xlab("Survival time (years)") +
+  ylab("Proportion surviving")+
+  ggtitle("Kaplan-Meier survival curve over time by ICU type")
+```
+
+The Kaplan Meier curve by ICU type shows there is a significant difference in survival between the groups. 
+
+```{r, echo=FALSE}
+#assess univariate and multivariate model hazard ratios using finalfit() function for numeric variables, stratified by age
+dependent_os  <- "Surv(Days, Status)"
+explanatory   <- c("strata(Age)", "SAPS1", "SOFA", "Albumin_max", "AST_max", "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "Glucose_max", "HCO3_max", "HR_diff", "Lactate_max", "Na_diff", "pH_diff", "RespRate_max", "Temp_diff", "Urine_max", "NISysABP_diff")
+
+cox_num_vars <- icu_patients_df1 %>% 
+    finalfit(dependent_os, explanatory, add_dependent_label = FALSE) 
+
+cox_num_vars[-2]%>% 
+    rename("Overall survival" = label) %>% 
+    rename("Mean (SD)" = all)  %>%  kbl() %>%   kable_styling()
+```
+
+The low p-values indicate that the chosen clinical measures are also significant predictors. 
+
+### Part B: Explanatory survival model
+
+```{r, suvival model, echo=TRUE, results="hide"}
+
+# Fit full model with all chosen variables 
+icu_patients_df1_clean <- icu_patients_df1[complete.cases(icu_patients_df1$SAPS1,icu_patients_df1$NISysABP_diff), ]
+fullcoxmodel <- coxph(Surv(Days, Status)~Age+ICUType+SAPS1+SOFA+Albumin_max+AST_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+Glucose_max+HCO3_max+HR_diff+Lactate_max+Na_diff+pH_diff+RespRate_max+Temp_diff+Urine_max+NISysABP_diff, data=icu_patients_df1_clean)
+summary (fullcoxmodel)
+
+#variables significant in full model - SAPS1, AST_max, Bilirubin_max, BUN_max, Creatinine_max, GCS_max, Urine_max, NISysABP_diff
+
+icu_patients_df1 <- icu_patients_df1[complete.cases(icu_patients_df1$SAPS1,icu_patients_df1$NISysABP_diff), ]
+
+# Reduced Cox model 
+cox_mod_reduced <- coxph(Surv(Days, Status)~strata(Age)+ICUType+SAPS1+AST_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+Urine_max+NISysABP_diff, data=icu_patients_df1) 
+summary(cox_mod_reduced) 
+# NISysABP_diff no longer significant 
+
+# review model without NISysABP_diff
+cox_mod_reduced2 <- coxph(Surv(Days, Status)~strata(Age)+ICUType+SAPS1+AST_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+Urine_max, data=icu_patients_df1) 
+summary(cox_mod_reduced2) 
+
+```
+```{r}
+#review which is more parsimonious model 
+AIC(cox_mod_reduced)
+AIC(cox_mod_reduced2)
+#lower AIC with first model 
+
+anova(cox_mod_reduced, cox_mod_reduced2)
+
+#decision to stay with cox_mod_reduced model as it is the simpler model with very similar concordance and AIC 
+
+#Check whether the proportional hazards assumptions hold
+cox.zph(cox_mod_reduced2) # global p <0.01 - assumptions violated 
+#ICUType, BUN_max, Creatinine_max - P.0.05 - hazards may be proportional over time in these groups 
+
+# Data analysis to address violation
+#16 days following discharge seems to be the sweet spot - difference in survival if still alive at 16 days after ICU admission 
+datasplit <- survSplit(Surv(Days, Status)~ Age+ICUType+SAPS1+AST_max+Bilirubin_max+BUN_max+Creatinine_max+GCS_max+Urine_max, data=icu_patients_df1, cut=c(16), episode= "tgroup", id="id2")
+cox_mod_split1 <- coxph(Surv(Days, Status)~strata(Age)+ICUType+SAPS1:strata(tgroup)+AST_max:strata(tgroup)+Bilirubin_max:strata(tgroup)+BUN_max+Creatinine_max+GCS_max:strata(tgroup)+Urine_max:strata(tgroup), data=datasplit)
+
+# use the cox.zph() function to check for the proportional hazards assumption
+cox.zph(cox_mod_split1) # remains violated, urine_max disrupting model 
+cox_mod_split2 <- coxph(Surv(Days, Status)~strata(Age)+ICUType+SAPS1:strata(tgroup)+AST_max:strata(tgroup)+Bilirubin_max:strata(tgroup)+BUN_max+Creatinine_max+GCS_max:strata(tgroup), data=datasplit)
+
+# use the cox.zph() function to check for the proportional hazards assumption
+cox.zph(cox_mod_split2) # no longer violated 
+```
+
+Age is still independently related to survival after controlling for other factors in the multivariable models. 
+
+Within the first 16 days after admission to ICU our model suggests type of ICU (Cardiac Surgery Recovery Unit), renal and liver function (specifically, maximum BUN, AST and Bilirubin) increase the risk of death after ICU admission. While maximum GCS and maximum creatinine reduce the risk of death. Not unsuprisingly in our model, the SAPS1 model (which is used to predict ICU outcomes) increased the risk of death for both time points. 
+
+Akaike's Information Criterion (AIC) is useful when comparing models as it takes into account likelihood as well as the number of parameters in the model, which is important to ensure parsimony. As a lower AIC indicates better overall balance between model fit and model simplicity, the reduced multivariable model (coxmodel2) is preferred. This is supported by the likelihood ratio test, which shows that although the maximum log likelihood is larger (i.e. better) for the model 1 (-4254.0) compared to model 2 (-4263.4), the p-value of chisq is not statistically significant (0.1269), indicating that the difference in fit between the two models is not statistically significant and that the simpler multivariable model (coxmodel2) should be chosen. 
+
+```{r}
+# REFIT cox_mod_split2 to df0 and comment on differences
+```
+
+### References 
+
+- Bagshaw, S. M., Webb, S. A., Delaney, A., George, C., Pilcher, D., Hart, G. K., & Bellomo, R. (2009). Very old patients admitted to intensive care in Australia and New Zealand: A multi-centre cohort analysis. Critical Care, 13(2), R45. https://ccforum.biomedcentral.com/articles/10.1186/cc7768
+-  Boumendil, A., Aegerter, P., Guidet, B., & CUB-Réa Network. (2005). Treatment intensity and outcome of patients aged 80 and older in intensive care units: A multicenter matched-cohort study. Journal of the American Geriatrics Society, 53(1), 88-93. https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1532-5415.2005.53016.x
+-  de Rooij, S. E., Govers, A. C., Korevaar, J. C., Giesbers, A. W., Levi, M., & de Jonge, E. (2008). Cognitive, functional, and quality of life outcomes of patients aged 80 and older who survived at least one year after planned or unplanned surgery or medical intensive care treatment. Journal of the American Geriatrics Society, 56(5), 816-822. https://onlinelibrary.wiley.com/doi/full/10.1111/j.1532-5415.2008.01671.x
+-  Lerolle, N., Trinquart, L., Bornstain, C., Tadié, J. M., Imbert, A., Diehl, J. L., Fagon, J. Y., & Guérot, E. (2010). Increased intensity of treatment and decreased mortality in elderly patients in an intensive care unit over a decade. Archives of Internal Medicine, 170(1), 59-65. https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/415749
+-  Valentin, A., Jordan, B., Lang, T., Hiesmayr, M., & Metnitz, P. G. (2003). Gender-related differences in intensive care: A multiple-center cohort study of therapeutic interventions and outcome in critically ill patients. Critical Care Medicine, 31(7), 1901-1907. https://journals.lww.com/ccmjournal/Abstract/2003/07000/Gender_related_differences_in_intensive_care__A.2.aspx
+-  Fuchs, L., Chronaki, C. E., Park, S., Novack, V., Baumfeld, Y., Scott, D., McLennan, S., Talmor, D., & Celi, L. A. (2012). ICU admission characteristics and mortality rates among elderly and very elderly patients. Intensive Care Medicine, 38(10), 1654-1661. https://link.springer.com/article/10.1007/s00134-012-2629-6
+-  Minne, L., Abu-Hanna, A., & de Jonge, E. (2008). Evaluation of SOFA-based models for predicting mortality in the ICU: A systematic review. Critical Care, 12(6), R161. https://ccforum.biomedcentral.com/articles/10.1186/cc7160
+-  Sacanella, E., Pérez-Castejón, J. M., Nicolás, J. M., Masanés, F., Navarro, M., Castro, P., & López-Soto, A. (2009). Functional status and quality of life 12 months after discharge from a medical ICU in healthy elderly patients: A prospective observational study. Critical Care, 13(2), R46. https://ccforum.biomedcentral.com/articles/10.1186/cc7769
+-  Heyland, D. K., Cook, D. J., Rocker, G. M., Dodek, P. M., Kutsogiannis, D. J., & Peters, S. (2005). The attributable morbidity and mortality of ventilator-associated pneumonia in the critically ill patient. The American Journal of Respiratory and Critical Care Medicine, 171(10), 1173-1179. https://www.atsjournals.org/doi/full/10.1164/rccm.200405-644OC
+-  Iapichino, G., Morabito, A., Mistraletti, G., Ferla, L., & Radrizzani, D. (2010). Age, illness severity, and ICU organizational factors influence long-term survival
+

@@ -1,0 +1,27 @@
+great, let's build this Section 2: Data Preprocessing, step by step. 
+For your suggested Step 2.1: Filter Relevant Records, I have some different ideal.
+I shcecked some relevant papers.
+in paper "A Retrospective Cohort Study  Predicting 90-Day Mortality for ICU Trauma Patients with a Machine Learning Algorithm Using XGBoost Using MIMIC-III Data", they set their Study Population
+In MIMIC-III, patients were diagnosed with trauma in the ICU. The inclusion criteria were patients aged between 18 and 89 years, who chose the first hospitalization for analysis when admitted to the hospital or ICU multiple times. The exclusion criteria were as follows: (1) no trauma diagnosis within 24 years after admission to the ICU, (2) length of ICU stay less than 1 day, and (3) lack of age or gender information. This study was reviewed and approved by the ethics committee of our institution.
+
+In paper "Predictive nomogram for 28-day mortality risk in mitral valve disorder patients in the intensive care unit: A comprehensive assessment from the MIMIC-III database", they have section 2.2. Patients and variables
+The necessary data were extracted using structured query language in DBeaver (version 23.3.4). Patients diagnosed with MVD were extracted using ICD-9 code “4240” in the MIMIC-III database. The exclusion criteria were as follows: (1) age <18 years and (2) those who had been treated in the ICU for <24 h. 
+
+In paper "Predicting 30-days mortality for MIMIC-III patients with sepsis-3: a machine learning approach using XGboost", they set their Study population
+Adult patients who were diagnosed with sepsis-3 were included in our study. The inclusion criteria were: (I) patients who were older than 18 years old; (II) length of stay in the ICU was over 24 h to ensure sufficient data for analysis; (III) patients with the diagnosed of sepsis according to The Third International Consensus Definitions for Sepsis and Septic Shock (sepsis-3) [2]. Because MIMIC-III database has shifted their date of birth to obscure their age, we excluded patients who were over 89 years, and if a patient had multiple admissions with sepsis, only the first admission was analyzed. As it is common with missing data in the MIMIC-III database, we also removed the variables with more than 20% observations missing to facilitate and ensure the accuracy of the review. However, for those with less than 20% missing data or randomly missing data, we explored and visualized them with Templ’s method (R Package “VIM”) [14] and multiple imputation method (R Package “mice”) [15] for further analysis respectively.
+
+In paper "Mean arterial pressure and mortality in patients with distributive shock: a retrospective analysis of the MIMIC-III database", their Study subjects part is:
+Patients for this study were selected from all persons in MIMIC-III aged ≥ 18 years at ICU admission who had received vasopressors (norepinephrine, epinephrine, dopamine, phenylephrine and/or vasopressin) continuously for ≥ 6 h between ICU admission and discharge, defined as the earliest of recorded ICU discharge, hospital discharge or time of death.
+Of these patients, we excluded those with conditions that may be associated with nondistributive shock, including: (1) cardiogenic shock (ICD-9-CM diagnosis codes 785.51 or 998.01), cardiac tamponade (423.3), pulmonary embolus (415.1); (2) use of intra-aortic balloon pump (IABP) or extracorporeal membrane oxygenation (ECMO); (3) administration of ≥ 3500 mL of red blood cells during any 48-h period; or (4) evidence (based on DRG) of specific procedures (e.g., cardiovascular, extra-cranial vascular). We also excluded patients with gaps in their ICU stay data as well as those with more than one otherwise qualifying ICU stay in a given hospital admission.
+
+In paper "Association of Sex With Clinical Outcome in Critically Ill Sepsis Patients: A Retrospective Analysis of the Large Clinical Database MIMIC-III", Study population is:
+All patients diagnosed with “sepsis,” “severe sepsis,” or “septic shock” in the MIMIC-III clinical database were potentially eligible for the present analysis. The only exclusion criterion was an age less than 18 years old.
+
+In addition, in the MIMIC-III online introduction pages, The patients table has specfic explain about the 'dob'
+
+'dob' is the date of birth of the given patient. Patients who are older than 89 years old at any time in the database have had their date of birth shifted to obscure their age and comply with HIPAA. The shift process was as follows: the patient’s age at their first admission was determined. The date of birth was then set to exactly 300 years before their first admission.
+
+Thus, I think set Study population aged between 18 and 89 years will be reasonable for us, do you have any other ideal or suggestion?
+
+Please refer the usage/setting of Patients and variables from these documents and combine with our project aimswhether mortality can be predicted from the first 24 hours of ICU observations (aim 1) and whether there are associations with mortality and admissions on weekend/weekday (aim 2), as well as my teacher's suggestion: "Noting that although we stipulate the first 24 hours of ICU information should be used for prediction, the outcomes itself should not be restricted to the same timeframe. Also noting that propensity score matching (question 2) may not be idea to use here, however survival analysis approach is fine."
+Then please give me a more detailed plan and codes of 'Step 2.1: Filter Relevant Records'

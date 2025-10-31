@@ -1,0 +1,429 @@
+---
+title: "HDAT9700: Assessment 2 - Chapters 3-5"
+subtitle: "Multilevel modelling"
+author: "Mark Hanly"
+date: "November 2024"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, error = FALSE, warning = FALSE, cache = TRUE)
+
+# Load libraries
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(tidyr)
+library(colorspace)
+
+# Define colors
+
+myPalette <- c('#136F63', '#F7C548', '#3083DC')
+
+# Load data
+load('hospSatisfaction.Rda')
+
+# short name for convenience
+df <- hospSatisfaction |> 
+  group_by(id) |> 
+  summarise(size = n()) |> 
+  left_join(hospSatisfaction, by = 'id') |> 
+  mutate(
+    area = factor(area, levels = c('remote', 'regional', 'urban')),
+    remote = ifelse(area=='remote', 1, 0),
+    retired = ifelse(age >=70, 1, 0)
+    )
+
+```
+
+## Section 1 
+
+### Question 1
+_What is the hierarchical data structure for this analysis?_ 
+
+This is a two-level hierarchy with 4,847 hospitals nested within 30 hospitals.
+
+### Question 2
+_With reference to appropriate Figure(s) or Table(s), discuss whether the national-level hospitals are performing better or worse compared to provincial-level hospitals for the five satisfaction measures, having accounted for case-mix._
+
+Figure 2 from the paper (copied below) presents the hospital random intercepts for five measures of satisfaction following case-mix adjustment. The national-level hospitals are denoted NA, NB and NC.
+
+![From Liu, Meicen, et al. Frontiers in Public Health 11 (2023)](liu-2023-fig2.png)
+
+
+The ranking for the national hospitals can be summarised as follows. 
+
+* **Administrative process** NA and NB average | NC above average
+* **Hospital environment** NA and NB average | NC above average
+* **medical care** NA below average | NB average | NC above average
+* **symptom management** NA, NB, and NC average, although the point estimate for NA is below zero and the point estimate for NC is above zero
+* **overall satisfaction** NA below average | NB average | NC above average
+
+We can conclude that the national hospital NC is performing above average for most measures, whereas the other two hospitals are average or even below average (for NA in particular) compared to the provincial-level hospitals. 
+
+
+## Section 2 
+
+### Question 1. 
+_Undertake an exploratory data analysis of the available data_ 
+
+```{r univariate-eda, include = FALSE}
+
+summary(df)
+length(unique(df$id)) # 40 hospitals
+
+# Distribution of patients per hospital
+df |> group_by(id) |> 
+  summarise(n=n()) |> 
+  summary()
+
+# Hospital status
+df |> group_by(id, status) |> 
+  summarise(n=n()) |> 
+  summary()
+
+# Hospital Area
+df |> group_by(id, area) |> 
+  summarise(n=n()) |> 
+  summary()
+
+```
+The dataset provides records on 7,690 individuals clustered within 40 hospitals, with an median of 208 patients per hospital (inter-quartile range (IQR): 108-254). This is a two level hierarchy with patients at level 1 clustered within hospitals at level 2. Among the 40 hospitals 9 were Private Hospitals and the 31 were Public Hospitals. Most (17/40) were situated in urban areas, with 12 hospitals in regional areas and 11 in remote areas. Satisfaction scores ranged from 16 to 96, with a median of 50 (IQR: 42-59) (Figure 1A). Age ranged from 22 to 98 years, with a median of 72 years (IQR: 64-80 years) (Figure 1B) and half of the sample (3,826/7,690) were women. Length of stay ranged from 1 to 25 days with a median of 3 days (IQR 2-5 days). 
+
+
+```{r univariate-vis, fig.height=3, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+
+u1 <- df %>% 
+  ggplot(aes(x = satisfaction)) + 
+  geom_histogram(color = 'white', fill = myPalette[1]) +
+  labs(x = 'Satisfaction')
+
+u2 <- df |> 
+  ggplot(aes(x=age, group=sex, fill=sex, color=sex)) +
+    geom_density(alpha=0.5, linewidth=1.2) +
+  scale_fill_manual("Sex", values = myPalette[1:2]) +
+  scale_color_manual("Sex", values = myPalette[1:2]) +
+  labs(x = 'Age (years)') 
+
+ggpubr::ggarrange(u1, u2, labels = "AUTO")
+
+```
+
+The exploratory analysis suggests that average satisfaction scores were higher for woman (median=53) compared to men (median=46)  (Figure 2A). Satisfaction increases with age, although there appears to be a step change around about age 70 (Figure 2B). Satisfaction scores were higher among patients who were readmitted (median=54) compared to those who were not readmitted (median=48) (Figure 2C). There was no strong relationship between between length of stay and satisfaction (Figure 2D). 
+
+
+```{r bivariate-stats, echo=FALSE, include=FALSE}
+
+# Check exact data
+df |> group_by(sex) |> summarise(med = median(satisfaction))
+df |> group_by(readmission) |> summarise(med = median(satisfaction))
+df |> group_by(status) |> summarise(med = median(satisfaction))
+df |> group_by(area) |> summarise(med = median(satisfaction))
+df |> group_by(id) |> summarise(med = median(satisfaction)) |> arrange(med)
+
+```
+
+
+```{r bivariate-eda, fig.height=6, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+
+b1 <- df %>% 
+  ggplot(aes(x = sex, y = satisfaction)) + 
+  geom_boxplot() +
+  labs(x = 'Sex', y = 'Satisfaction')
+
+b2 <- df %>% 
+  ggplot(aes(x = age, y = satisfaction)) + 
+  geom_point(size=0.1) +
+  geom_smooth(linewidth = 2, method = 'lm', formula = y ~ poly(x, 2), color = myPalette[1]) +
+  labs(x = 'Age', y = 'Satisfaction')
+
+b3 <- df %>% 
+  ggplot(aes(x = readmission, y = satisfaction)) + 
+  geom_point() +
+  geom_boxplot() +
+  labs(x = 'Readmission', y = 'Satisfaction')
+
+b4 <- df %>% 
+  ggplot(aes(x = los, y = satisfaction)) + 
+  geom_point() +
+  geom_smooth(size = 2, method = 'lm', formula = y ~ poly(x, 2), color = myPalette[1]) +
+  labs(x = 'Length of stay (days)', y = 'Satisfaction')
+
+b5 <- df %>% 
+  ggplot(aes(x = status, y = satisfaction)) + 
+  geom_boxplot() +
+  labs(x = 'Status', y = 'Satisfaction')
+
+b6 <- df %>% 
+  ggplot(aes(x = area, y = satisfaction)) + 
+  geom_boxplot() +
+  labs(x = 'Area', y = 'Satisfaction')
+
+ggpubr::ggarrange(b1, b2, b3, b4, b5, b6, labels = "AUTO")
+
+```
+
+Satisfaction was higher on average among patients attending private hospitals (median=63) compared to public hospitals (median=47) and higher among remote hospitals (median=69) compared to regional (median=48) or urban hospitals (median=48). The overall distribution of satisfaction scores was very similar in regional and urban areas. 
+
+The distribution of satisfaction scores varied considerably across the 40 hospitals, from a median score of 38 in hospital 1034 to a median score of around 79 in hospital 1039 (Figure 3A). We can also see that the Private hospitals tended to outperform Public hospitals (Figure 3A) and that hospitals in Remote areas tended to outperform those in Regional or Urban areas (Figure 3B).
+
+#### Figure 3. Distribution of satisfaction scores by hospital and other hospital-level characteristics
+
+
+```{r hospital-eda, fig.height=9, fig.width=6, fig.fullwidth = FALSE, fig.align='centre'}
+
+h1 <- df %>% 
+  ggplot(aes(x = reorder(id, satisfaction, FUN = median), y = satisfaction, fill = status)) + 
+  geom_boxplot() +
+  labs(x = NULL, y = 'Satisfaction') + 
+  scale_fill_manual("Status", values = myPalette[1:2]) +
+  theme(
+    legend.position = 'bottom',
+    axis.text.x = element_text(angle=90)
+    )
+
+h2 <- df %>% 
+  ggplot(aes(x = reorder(id, satisfaction, FUN = median), y = satisfaction, fill = area)) + 
+  geom_boxplot() +
+  labs(x = NULL, y = 'Satisfaction') + 
+  scale_fill_manual("Area", values = myPalette[1:3]) +
+  theme(
+    legend.position = 'bottom',
+    axis.text.x = element_text(angle=90)
+    )
+
+h3 <- df |> 
+  group_by(id) |>
+  summarise(size = n(), satisfaction = mean(satisfaction), area = first(area)) |> 
+  ggplot(aes(x=size, y = satisfaction, color = area, fill=area)) +
+  geom_point(size = 2, shape=21) +
+  scale_color_manual("Area", values = myPalette[1:3]) +
+  scale_fill_manual("Area", values = lighten(myPalette[1:3], 0.3)) +
+  labs(x = 'Number of patients', y = 'Satisfaction') + 
+  theme(legend.position = 'bottom')
+
+ggpubr::ggarrange(h1, h2, h3, labels = "AUTO", ncol=1)
+
+```
+
+In Figure 3C I have presented the distribution of satisfaction scored ordered by hospital size. Here, hospital size is a newly derived variable measuring the total number of admissions from each hospital in the dataset. This figure shows that hospitals in Rural areas tend to be smaller than those in regional and urban areas. Even within area, there appears to be a negative association between hospital size and satisfaction, with higher scores in smaller hospitals. 
+
+To summarise, satisfaction scores appear to be influenced by patients' sex, age and readmission status, and by hospital status, size and location. 
+
+Next, we can explore whether the relationships between patient-level factors and satisfaction varies by hospital.
+
+
+#### Figure 4. The relationship between sex and satisfaction scores by hospital
+
+```{r hosp-eda-sex, fig.height=7, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+ggplot(df, aes(x = sex, y = satisfaction)) + 
+  geom_boxplot() + facet_wrap(~id, ncol=10) + 
+  labs(x = 'Age (years)', y = 'Satisfaction score')
+```
+
+The higher satisfaction scores for women compared to men appears to be consistent across the 40 hospitals.
+
+#### Figure 5. The relationship between age and satisfaction scores by hospital
+
+```{r hosp-eda-age, fig.height=7, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+ggplot(df, aes(x = age, y = satisfaction)) + 
+  geom_point(size=.1) + 
+  geom_smooth(method = 'lm', formula = y ~ poly(x, 2), color = myPalette[2]) + 
+  facet_wrap(~id) + labs(x = 'Readmission', y = 'Satisfaction score')
+```
+
+The positive relationship between age and satisfaction, with a change around age 70, appears to be consistent across the 40 hospitals.
+
+#### Figure 6. The relationship between readmission and satisfaction scores by hospital
+
+```{r hosp-eda-rx, fig.height=7, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+ggplot(df, aes(x = readmission, y = satisfaction)) + 
+  geom_boxplot() + facet_wrap(~id, ncol=10) + 
+  labs(x = 'Readmission', y = 'Satisfaction score')
+```
+
+The higher satisfaction scores for readmission appears to be higher in some hospitals (e.g. 1009) compared to others, where there is almost no gap (e.g. 1032).
+
+
+
+### Question 2.
+_Fit a series of multilevel models and select the best-fitting model for the data_ 
+
+Before proceeding with the modelling, I will standardised the continuous variables of age and hospital size, to facilitate model estimation. The distribution of satisfaction scores in Regional and Urban areas is very similar so I will group these categories, creating a single dummy variable that indicates Rural areas versus Regional/Urban. I was also create a dummy variable for patients aged over 70 years to explore the change around this time. As discussed above, this is a two level hierarchy so I will fit a series of two-level models with patients at level 1 and hospital at level 2. To start however, I will fit a null single-level model  (**Model 0**) and a null two-level model or variance components model (**Model 1**) to support the choice of a multilevel model (Table 1).
+
+
+```{r fit-models, echo=FALSE}
+
+df1 <- df |> 
+  mutate(
+    agec = (age - mean(age))/sd(age),
+    losc = (los - mean(los))/sd(los),
+    sizec = (size - mean(size))/sd(size)
+  )
+
+m0 <- lm(satisfaction ~ 1,  data = df1)
+m1 <- lmer(satisfaction ~ 1 + (1|id),  data = df1)
+
+# Present the baseline models in a table
+predLabs1 <- c('Intercept')
+dvLabs1 <- c("Model 0", "Model 1")
+
+sjPlot::tab_model(m0, m1,
+                  pred.labels = predLabs1,
+                  show.p = FALSE,
+                  show.r2 = FALSE,
+                  show.aic = TRUE,
+                  dv.labels = dvLabs1,
+                  digits.re=1,
+                  title = "Table 1. Modelling hospital satisfaction: comparison of empty single level model to empty random intercept model")
+
+```
+
+The comparison of the null single and multilevel models clearly supports the use of a multilevel model for this dataset: there is a large drop in AIC (60,901 to 54,455) and the Variance Partition Coefficient is 0.658 (i.e. $\frac{130.2}{67.6+130.2}$, indicating that 66% of the variation in patient satisfaction scores is attributable to the hospital they were admitted to.
+
+The next stage of the modelling was to add patient and hospital level covariates as fixed and random effects to build a series of more complex models. First I fitted a model including all of the patient-specific covariates (age, sex, length of stay and readmission status) as fixed effects (**Model 2**). The estimated coefficient for length of stay was non significant so I removed this (**Model 3**), which improved the model fit, with a drop in AIC from 63,912 to 63,904. The exploratory data analysis suggested a nonlinear association between age and satisfaction. To reflect this I tested a quadratic term for age (**Model 4**). Comparing the AIC values for Models 4 to Model 3 indicates that including the quadratic term for age improved the model, with the AIC dropping from 49,100 to 49,085. 
+
+
+```{r model-table}
+
+m2 <- lmer(satisfaction ~ 1 + agec + sex + losc + readmission + (1|id),  data = df1)
+m3 <- lmer(satisfaction ~ 1 + agec + sex + readmission + (1|id),  data = df1)
+m4 <- lmer(satisfaction ~ 1 + agec + I(agec^2) + sex + readmission + (1|id),  data = df1)
+m5 <- lmer(satisfaction ~ 1 + agec + I(agec^2) + sex + readmission + sizec + status + remote + (1|id),  data = df1)
+m6 <- lmer(satisfaction ~ 1 + agec + I(agec^2) + sex + readmission + sizec + status + remote + (1 + readmission|id),  data = df1, control = lmerControl(optimizer ="Nelder_Mead")) # use of optimiser here helps convergence
+
+predLabs2 <- c('Intercept', 'Age (standardised)','Sex = Male', 'Length of stay (standardised)', 'Readmission = Yes', 'Age-squared', 'Size (standardised)', 'Status = Public', 'Remote')
+dvLabs2 <- paste("Model", 2:6)
+
+sjPlot::tab_model(m2, m3, m4, m5, m6,
+                  pred.labels = predLabs2,
+                  show.p = FALSE,
+                  show.r2 = FALSE,
+                  show.icc = FALSE,
+                  show.aic = TRUE,
+                  dv.labels = dvLabs2,
+                  digits = 2,
+                  digits.re=1,
+                  title = "Table 2. Multilvel models of hospital satisfaction")
+
+```
+
+
+Next I added the three hospital-specific variables, indicating size, status and remote areas (**Model 5**). All three variables were significant, reflected in a large drop in AIC. Finally, because the exploratory analysis suggested that the effect of readmission varied across hospitals, I added a random effect for the effect of readmission (**Model 6**). The inclusion of this term was supported by the drop in AIC from 48,892 to 48,840. 
+
+
+### Question 3.
+_For your chosen model, check the model validity and communicate the model results using appropriate visualisations_
+
+The posterior estimates of the hospital-level random intercepts (Figure 7A) and random slopes for the effect of length of stay (Figure 7B) from the final model for patient satisfaction are presented below. These plots confirm that the random effects are reasonably normally distributed, as expected (as there are only 40 higher level units, we can expect and accept some slight deviations from normality).
+
+#### Figure 7. Posterior estimates of the random intercepts and random slopes
+
+```{r random-effects, fig.height=7, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+
+ranef <- as.data.frame(ranef(m6)) %>%
+    mutate(lower = condval - 1.96*condsd,
+         upper = condval + 1.96*condsd)
+
+p1 <- ranef %>%
+  filter(term == "(Intercept)") %>%
+    ggplot(aes(x = condval)) +
+    geom_histogram(bins = 7, color = 'white', fill = myPalette[1]) +
+    labs(title = 'Random intercept', x = 'Posterior estimate', y = 'Count')
+
+p2 <- ranef %>%
+  filter(term == "readmissionYes") %>%
+    ggplot(aes(x = condval)) +
+    geom_histogram(bins = 7, color = 'white', fill = myPalette[1]) +
+    labs(title = 'Random slope for length of stay', x = 'Posterior estimate', y = 'Count')
+
+p3 <- ranef %>%
+  filter(term == "(Intercept)") %>%
+    ggplot(aes(x = grp, y = condval, ymin = lower, ymax = upper)) +
+    geom_hline(aes(yintercept=0), color = myPalette[1], linewidth=1.2) +
+    geom_point() +
+    geom_linerange() +
+    scale_y_continuous(limits = c(-5, 5)) +
+    labs(title = 'Random intercept', x = 'Hospital ID', y = 'Posterior estimate') +
+    theme(axis.text.x = element_text(angle=90))
+
+p4 <- ranef %>%
+  filter(term == "readmissionYes") %>%
+    ggplot(aes(x = reorder(grp, condval), y = condval, ymin = lower, ymax = upper)) +
+    geom_hline(aes(yintercept=0), color = myPalette[1], size=1.2) +
+    geom_point() +
+    geom_linerange() +
+    scale_y_continuous(limits = c(-5, 5)) +  
+    labs(title = 'Random slope for Readmission', x = 'Hospital ID', y = 'Posterior estimate') +
+    theme(axis.text.x = element_text(angle=90))
+
+ggpubr::ggarrange(p1, p2, p3, p4, labels = 'AUTO')
+
+```
+
+Caterpillar plots for the hospital level random-intercepts (Figure 7C) and random slope for readmission (Figure 7D) are also presented. These plots reinforce the strong hospital-level effect on patient satisfaction in this dataset, with some hospitals falling significantly below (e.g. hospitals 1032 and 1007) and others falling significantly above (e.g. hospitals 1006 and 1019) the average hospital performance. The variable effect of readmission across hospitals can also be seen clearly (Figure 4D), with effects that are considerably above average in some hospitals (e.g. 1006) and below average in others (e.g. 1007). In Figure 8 below we can observe the positive covariance between the random intercept and random slope terms. Note that hospitals with above average baseline satisfaction tend to have an above average effect of readmission (e.g 1019). Conversely, hospitals with below average baseline satisfaction tend to have a below average effect of readmission (e.g Hospital 1034).
+
+
+#### Figure 8. The association between random intercept and random slope for Readmission
+
+```{r covar, fig.height=7, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+
+ranef %>%
+  select(term, grp, condval) %>%
+  pivot_wider(id_cols = grp, names_from = term, values_from = condval) %>%
+    ggplot(aes(x = `(Intercept)`, y = readmissionYes, label = grp)) +
+    geom_vline(aes(xintercept = 0), size = 1, col='grey40') +
+    geom_hline(aes(yintercept = 0), size = 1, col='grey40') +
+    geom_smooth(method = 'glm', fill = lighten(myPalette[1]), color = myPalette[1], alpha = 0.8) +
+    geom_label(size = 6, color = myPalette[1]) +
+    labs(x = 'Random intercept', y = 'Random slope for readmission')
+
+```
+
+### Question 4.
+_For your chosen model, provide a written interpretation of all of the model parameters_ 
+
+The final preferred model for patient satisfaction is a two-level hierarchical multilevel model with 7,690 patients at level 1 and 40 hospitals at level 2. The fixed part of the model includes a patient's sex, a linear term for age and an additional indicator for age greater than 70 years, and a binary indicator for whether or not the hospital admission was a readmission. Hospital characteristics included the hospital size (i.e. the number of admissions in the data source), status (public or private) and a dummy indicator for hospitals in remote areas. The random part of the model includes a random intercept for each hospital and a random slope for the effect of readmission varying across hospitals.
+
+Table 3 below presents the model estimates. Recall that age and hospital size are standardised so the baseline refers to the 'average' age and hospital size, and a "one-unit change" corresponds to a one standard deviation change in the scale of the unstandardised variable.
+
+The model intercept indicates an average satisfaction score of 60.6 (95% CI: 60.1, 61.1) for the baseline patient, a 72 year old female following first admission to an averaged-sized private hospital in a regional or urban area. Male patients return satisfaction scores that were 7.2 points lower on average (95% CI: -7.5, -7.0). Readmitted patients returned satisfaction scores that were 5.4 points higher on average (95% CI: 4.9, 5.9). Patients admitted to Public Hospitals returned scores that were -10.5 points lower on average (95% CI: -11.0, -9.9). Finally, patients admitted to hospitals in remote areas returned scores that were 4.8 points higher on average (95% CI: 3.8, 5.9).  
+
+```{r final-model}
+predLabs3 <- c('Intercept', 'Age (standardised)', 'Age-squared', 'Sex (Male)', 'Readmission = Yes', 'Size (standardised)', 'Status = Public', 'Remote')
+sjPlot::tab_model(m6, pred.labels = predLabs3, show.p = FALSE, show.r2 = FALSE, show.icc = FALSE, dv.labels = '',
+                  digits = 1,
+                  title = "Table 3. Final model of patient satisfaction")
+
+```
+
+The residual within-hospital variance was 33.1. The between hospital variance was 0.25 and combined with the grand mean intercept, this indicates that the average satisfaction score for the 'baseline individual' lies between 59.6 and 61.6 for 95% of hospitals (i.e. $60.6 \pm  \sqrt{0.25} \times 1.96$). The estimated variance of the effect of being readmitted across hospitals was 1.93, suggesting that the change in satisfaction score associated with being admitted ranged between 2.7 and 8.1 for 95% of hospitals (i.e. $5.5 \pm  \sqrt{1.93} \times 1.96$). There was a positive correlation between the random intercept for hospital and the random slope for readmission (0.75), as seen in Figure 8. This reinforces that hospitals with above average satisfaction scores had above average effects of readmission. Put differently, the positive association between readmission and satisfaction scores was stronger in hospitals with higher satisfaction scores. 
+
+Figure 9 below presents hospital-specific predictions for patient satisfaction by age, for baseline patients.
+
+#### Figure 9. Hospital-specific predictions for patient satisfaction by age
+
+```{r predictions1, fig.height=7, fig.width=9, fig.fullwidth = FALSE, fig.align='centre'}
+
+dfPred1 <- df1
+dfPred1$sex <- 'F'
+dfPred1$readmission <- 'Yes'
+dfPred1$sizec <- 0
+dfPred1$status <- 'public'
+dfPred1$remote <- 0
+
+dfPred1$p <- predict(m6, newdata = dfPred1)
+
+ggplot(data=dfPred1) +
+      geom_point(aes(x = age, y = satisfaction, alpha = 0.2), color = 'grey70') +
+      geom_line(aes(x = age, y = p, group=id), size = 0.4, color = myPalette[1]) +
+      scale_x_continuous("Age (years)") +
+      scale_y_continuous("Predicted satisfaction", limits = c(0,100)) +
+      theme(legend.position = 'none') +
+      labs(caption = 'Predictions for a women admitted to a private hospital in urban/regional area')
+
+```
+
+The hospital specific random intercepts can be clearly seen, with the positive association between age and satisfaction scores increasing among older patients. 
+
+***

@@ -1,0 +1,1776 @@
+---
+title: "Data Preprocessing EDA and Feature Engineering"
+author: "Zhenyu Zhang"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r libraries, echo=FALSE}
+library(readr)
+library(data.table) # handle large datasets, `fread()` are much faster than `read.csv()` for loading large CSV files
+library(dplyr)
+library(lubridate) # simplifies working with dates and times
+library(zoo)
+library(janitor)
+library(ggplot2)
+library(survival)
+library(survminer)
+library(randomForest)
+library(corrplot)
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggridges)
+library(tidyr)
+library(patchwork)
+library(shiny)
+library(parallaxr)
+```
+
+---
+
+## Section 1: Data Understanding
+
+### Objectives:
+- Understand the structure and purpose of key MIMIC-III tables.
+- Identify relationships between tables to facilitate feature extraction.
+- Review variable definitions and units of measurement.
+
+### Steps:
+#### 1.1 **Overview of all Tables**:
+   - Focus on the following pre-processed tables in 'mimic_data' folder:
+    - `admissions.csv`: Admission details, including admission and discharge times.
+    - `antibiotics.csv`: Antibiotic usage data.
+    - `bloodculture.csv`: Results of blood culture tests.
+    - `gcs_hourly.csv`: Glasgow Coma Score records.
+    - `icd9_diag.csv`: ICD-9 diagnostic codes for patient conditions.
+    - `icustays.csv`: ICU stay details (e.g., admission, discharge times).
+    - `labs_hourly.csv`: Hourly laboratory results.
+    - `output_hourly.csv`: Fluid output data.
+    - `patients.csv`: Demographics and mortality information.
+    - `pt_icu_outcome.csv`: Patient outcomes (e.g., mortality) per ICU stay.
+    - `pt_stay_hr.csv`: Hourly records of ICU stays.
+    - `pt_weight.csv`: Patient weight records.
+    - `pv_mechvent.csv`: Mechanical ventilation data.
+    - `transfers.csv`: Information on patient transfers within the hospital.
+    - `vasopressors.csv`: Administration of vasopressors.
+    - `vitals_hourly.csv`: Hourly vital sign measurements.
+   - Use `data.table` for efficient loading of large datasets.
+   
+#### 1.2 **Relationships Between Tables**:
+- Key relationships include:
+  - `subject_id`: Links `patients`, `admissions`, and `icustays`.
+  - `hadm_id`: Links `admissions` and `icustays`.
+  - `icustay_id`: Links ICU-specific data (e.g., `vitals_hourly`, `labs_hourly`, etc.).
+  - Other tables (e.g., `antibiotics`, `bloodculture`) use these IDs to connect to patient-specific data.
+
+#### 1.3 **Initial Summarisation**:
+- Explore each table:
+  - Number of rows and columns.
+  - Key variables and their data type.
+  - Missing data percentages.
+
+```{r dataset reading, echo=FALSE}
+# Set file paths
+data_path <- "C:/Users/froze/OneDrive/Documents/mimic_data/"
+output_path <- "C:/Users/froze/OneDrive/Documents/HDAT9910/cleaned_data/"
+
+# List of files in the mimic_data folder
+file_list <- list.files(data_path, pattern = "\\.csv$", full.names = TRUE)
+
+# Function to explore tables
+explore_table <- function(file_path) {
+  # Extract table name from the file path
+  table_name <- gsub(".csv", "", basename(file_path))
+  
+  # Load the data
+  data <- fread(file_path)
+  
+  # Print table summary
+  cat("\n### Summary of Table:", table_name, "###\n")
+  cat("Number of rows:", nrow(data), "\n")
+  cat("Number of columns:", ncol(data), "\n")
+  
+  # Create a summary table for column names and data types
+  summary_table <- data.frame(
+    Data_Type = sapply(data, function(col) class(col)[1]),  # Primary class only
+    Missing_Count = sapply(data, function(col) sum(is.na(col))),  # Count of missing values
+    Missing_Pct. = sapply(data, function(col) 
+      formatC(mean(is.na(col)) * 100, format = "f", digits = 2)  # Format to 2 decimal places
+    )
+  )  
+  
+  # Print the summary table
+  cat("Column names and data types:\n")
+  print(summary_table)
+  
+  cat("\n---\n")
+  
+  # Return the loaded data
+  return(data)
+}
+
+# Load and summarize all tables
+tables <- lapply(file_list, explore_table)
+
+# Assign names to the list based on file names (without extensions)
+names(tables) <- gsub(".csv", "", basename(file_list))
+
+# Print confirmation
+cat("\nAll CSV tables have been successfully loaded and summarized!\n")
+cat("Loaded tables:\n", paste(names(tables), collapse = ", "), "\n")
+
+```
+
+#### 1. **admissions**
+- **Rows**: 58,976 | **Columns**: 19
+- **Key Missingness**: 
+  - `deathtime`: 90.07% missing. Relevant for mortality analysis but likely reflects non-deceased patients.
+  - Minimal missingness for core variables like `admittime`, `dischtime`, and demographic details.
+- **Observation**: High-quality foundational data with minimal issues, apart from `deathtime`.
+
+
+#### 2. **antibiotics**
+- **Rows**: 164,927 | **Columns**: 16
+- **Key Missingness**:
+  - `rate` and `rateuom`: Both 100% missing, suggesting these variables can be dropped.
+  - `totalamount`: 5.04% missing.
+- **Observation**: Useful for understanding antibiotic administration, though some variables appear irrelevant.
+
+
+#### 3. **bloodculture**
+- **Rows**: 632,506 | **Columns**: 10
+- **Key Missingness**:
+  - `icustay_id`: 24.79% missing, significant for ICU-related analyses.
+  - `hr`: 29.68% missing.
+- **Observation**: Moderate missingness for key ICU identifiers may limit linking with other tables.
+
+
+#### 4. **gcs_hourly**
+- **Rows**: 1,515,342 | **Columns**: 7
+- **Key Missingness**:
+  - `gcseyes`, `gcsmotor`, and `gcsverbal`: <0.3% missing, indicating good data quality.
+- **Observation**: Reliable source for Glasgow Coma Scale (GCS) data with low missingness.
+
+
+#### 5. **icd9_diag**
+- **Rows**: 651,047 | **Columns**: 7
+- **Key Missingness**:
+  - Minimal issues, with <0.01% missing in `seq_num`.
+- **Observation**: High-quality diagnosis data, ready for analysis.
+
+
+#### 6. **icustays**
+- **Rows**: 61,532 | **Columns**: 12
+- **Key Missingness**:
+  - `outtime` and `los`: Both 0.02% missing.
+- **Observation**: Reliable ICU stay details with minimal issues.
+
+
+#### 7. **labs_hourly**
+- **Rows**: 928,195 | **Columns**: 22
+- **Key Missingness**:
+  - Many variables exceed 90% missingness, including `creactiveprotein (99.81%)` and `alaninetransaminase (90.13%)`.
+  - Core variables like `neutrophil` (91.98%) also have high missingness.
+- **Observation**: Key lab data but requires careful selection and imputation due to widespread missingness.
+
+
+#### 8. **output_hourly**
+- **Rows**: 3,325,543 | **Columns**: 3
+- **Key Missingness**:
+  - `urineoutput`: 0.36% missing.
+- **Observation**: High-quality output data with negligible issues.
+
+
+#### 9. **patients**
+- **Rows**: 46,520 | **Columns**: 8
+- **Key Missingness**:
+  - Mortality-related fields (`dod_hosp`, `dod_ssn`) have >70% missingness.
+  - Demographic fields like `gender` and `dob` are complete.
+- **Observation**: Core patient demographics are robust, but mortality data requires handling.
+
+
+#### 10. **pt_icu_outcome**
+- **Rows**: 61,533 | **Columns**: 17
+- **Key Missingness**:
+  - Critical fields like `hosp_deathtime (96.30%)` and `dod (60.68%)` have very high missingness.
+- **Observation**: ICU outcomes are incomplete for most patients.
+
+
+#### 11. **pt_stay_hr**
+- **Rows**: 3,687,586 | **Columns**: 9
+- **Key Missingness**:
+  - Minimal, with `dy` missing 0.04%.
+- **Observation**: Comprehensive hourly stay data with excellent quality.
+
+
+#### 12. **pt_weight**
+- **Rows**: 396,241 | **Columns**: 11
+- **Key Missingness**:
+  - Most weight-related fields exceed 60% missingness, e.g., `admissionweight (83.68%)`.
+- **Observation**: Data quality for weight variables is poor, limiting analysis.
+
+
+#### 13. **pv_mechvent**
+- **Rows**: 694,958 | **Columns**: 21
+- **Key Missingness**:
+  - Ventilation parameters like `pressurehighaprv` and `timelowaprv` exceed 99% missingness.
+  - `minutevolume`: 33.55% missing.
+- **Observation**: Highly sparse data, with only a few useful variables.
+
+
+#### 14. **transfers**
+- **Rows**: 261,897 | **Columns**: 13
+- **Key Missingness**:
+  - `icustay_id`: 66.51% missing.
+  - Ward identifiers (`prev_wardid` and `curr_wardid`) have ~22.5% missingness.
+- **Observation**: Transfer details are partially incomplete, limiting their utility.
+
+
+#### 15. **vasopressors**
+- **Rows**: 314,964 | **Columns**: 11
+- **Key Missingness**:
+  - Missingness ranges from 57.78% (`dopamine_rate`) to 91.01% (`dobutamine_amount`).
+- **Observation**: Sparse data for vasopressor administration, with limited reliable variables.
+
+
+#### 16. **vitals_hourly**
+- **Rows**: 7,292,362 | **Columns**: 11
+- **Key Missingness**:
+  - Vital signs like `fio2` and `temperature` exceed 75% missingness.
+  - Core variables like `heartrate` and `spo2` are ~10-30% missing.
+- **Observation**: Rich time-series data but requires significant preprocessing.
+
+
+### 1.4 **Key Observations from Data**:
+#### 1.4.1 **High Missingness in Time-Series Data (`vitals_hourly` and `labs_hourly`)**:
+   - Many variables in `labs_hourly` and `vitals_hourly` exceed **70% missingness**.
+   - Some variables (`creactiveprotein`, `alaninetransaminase`) in `labs_hourly` have almost **complete missingness**, making them unsuitable for imputation or analysis.
+
+#### 1.4.2 **Time Discrepancies in `hr` Across Tables**:
+   - `vitals_hourly`: `hr` starts at 1 (post-ICU admission) and increments hourly.
+   - `labs_hourly`: `hr` includes negative values for pre-ICU measurements.
+   - Different intervals or irregular sampling times make direct alignment across tables challenging.
+
+#### 1.4.3 **Key Tables for the First 24 Hours**:
+   - `pt_stay_hr`: Provides a comprehensive hourly structure for ICU stays and can act as a unifying table for `hr` alignment.
+   - `vitals_hourly` and `labs_hourly`: Crucial for predictive modeling but need proper filtering for the first 24 hours.
+
+#### 1.4.4 **Predictive Modeling Needs**:
+   - Accurate prediction of mortality requires reliable features extracted from the **first 24 hours**.
+   - Time-sensitive modeling approaches (e.g., LSTMs, GRUs) need continuous time-series data, while tree-based models (e.g., XGBoost) can use aggregated features.
+  
+  
+
+### 1.5 Consideration for following analysis
+Ensure high-quality data is used while minimizing the impact of missingness on analyses.
+#### 1.4.1 **Prioritize Tables with Low Missingness**:
+   - `admissions`, `patients`, `icustays`, and `gcs_hourly` are the most reliable tables for initial analysis.
+
+#### 1.4.2 **Handle High Missingness Strategically**:
+   - For tables like `labs_hourly` and `vitals_hourly`, consider using imputation, variable selection, or excluding highly sparse variables.
+
+#### 1.4.3 **Focus on Core Time-Series Data**:
+   - `vitals_hourly` and `output_hourly` provide crucial insights into patient conditions, despite moderate missingness.
+
+#### 1.4.4 **Exclude Variables with >90% Missingness**:
+   - Tables like `vasopressors` and `pv_mechvent` have several variables with near-complete missingness, which may not have value.
+---
+
+## Section 2: Data Preprocessing
+
+### Objectives:
+- Prepare the dataset for analysis by filtering, merging, and handling missing data.
+- Ensure consistency and completeness in the preprocessed data.
+
+### Define the study population:
+   - Focus on ICU patients aged between **18 and 89 years**, Aligns with the MIMIC-III age shifting policy for HIPAA compliance and avoids pediatric and super-elderly populations.
+   - Retain only the **first ICU admission** per patient to ensure independence of observations and avoids over representation of specific patients.
+   - Ensure the ICU stay duration is **≥ 24 hours** for providing sufficient data for meaningful feature extraction.
+   - Add **Weekend/Weekday Flag**, which directly supports Aim 2, investigating mortality association with admission timing.
+
+### Validate inclusion and exclusion criteria
+   - Exclude records missing critical demographic variables like gender, age, or ICU admission/discharge times.
+   - Align with project aims to predict mortality using data from the **first 24 hours of ICU stay** (for predictors) but not restrict mortality outcomes to the same timeframe.
+
+### Steps:   
+#### 2.1 **Merge Patients, Admissions, and ICU Stays**
+- **Objective**: Combine demographic, admission, and ICU stay data into a cohesive dataset for initial filtering.
+- **Why**: `patients`, `admissions`, and `icustays` tables provide core demographic and hospitalization data that form the backbone of our analysis.
+- **How**:
+  - Merge `patients` and `admissions` using the key `subject_id` to align patient demographics with their hospital admissions.
+  - Merge the resulting dataset with `icustays` using the keys `subject_id` and `hadm_id` to include ICU-specific stay details.
+
+
+#### 2.2 **Retain the First ICU Admission per Patient**
+- **Objective**: Ensure that each patient contributes only their first ICU admission to the analysis.
+- **Why**: Retaining only the first ICU admission avoids over-representation of patients with multiple ICU stays and ensures independence of observations.
+- **How**:
+  - Sort the data by `subject_id` and `admittime`.
+  - Use `.SD[1]` to retain the first ICU stay for each `subject_id`.
+
+
+#### 2.3 **Filter by Age (18 ≤ Age ≤ 89)**
+- **Objective**: Focus on adult patients while excluding pediatric and super-elderly populations.
+- **Why**: The MIMIC-III dataset masks ages above 89 due to HIPAA compliance, making exact age unknown for these patients.
+- **How**:
+  - Calculate patient age at admission as the difference between `admittime` and `dob`.
+  - Retain records where age is between 18 and 89.
+
+
+#### 2.4 **Filter ICU Stays Lasting ≥ 24 Hours**
+- **Objective**: Exclude ICU stays shorter than 24 hours to ensure sufficient data for analysis.
+- **Why**: Short ICU stays may not provide enough information for meaningful predictive modeling.
+- **How**:
+  - The 'los' variable in the icustays table already represents the length of stay in days.
+  - Convert it to hours (los_hours = los * 24) for consistency.
+  - Retain records where `los_hours` is 24 or more.
+
+
+#### 2.5 **Add Weekend Admission Flag**
+- **Objective**: Identify ICU admissions occurring on weekends to address Aim 2 of the project.
+- **Why**:
+  - Investigate whether weekend ICU admissions are associated with higher mortality rates.
+  - Weekend admissions could differ in outcomes due to variations in staffing, resource availability, or other factors.
+- **How**:
+  - Add a new column `intime_weekdays` to display the day of the week (e.g., "Monday", "Saturday").
+  - Use this column to create a boolean flag `is_weekend_admission`, which is set to `TRUE` for admissions occurring on "Saturday" or "Sunday".
+  - Save the updated dataset to include these new columns for downstream analysis.
+
+
+#### 2.6 **Save Intermediate Filtered Data**
+- **Objective**: Save the filtered dataset for reproducibility and debugging purposes.
+- **Why**: Provides a checkpoint to avoid repeating prior filtering steps if further processing needs adjustments.
+- **How**:
+  - Save the filtered dataset (`filtered_data`) as an RDS file using `saveRDS`.
+
+
+#### 2.7 **Merge Time-Series Data into `pt_stay_hr`**
+- **Objective**: Combine hourly clinical measurements into the base time-series structure of `pt_stay_hr`.
+- **Why**: Hourly data from `vitals_hourly`, `labs_hourly`, `gcs_hourly`, and `output_hourly` provide critical features for predictive modeling.
+- **How**:
+  - Sequentially left join `vitals_hourly`, `labs_hourly`, `gcs_hourly`, and `output_hourly` to `pt_stay_hr` using `icustay_id` and `hr`.
+
+
+#### 2.8 **Filter Time-Series Data to First 24 Hours**
+- **Objective**: Retain only the data corresponding to the first 24 hours of ICU stay.
+- **Why**: Aligns with the project requirement to use the first 24 hours of ICU data for prediction while not limiting outcomes to the same timeframe.
+- **How**:
+  - Filter records where the `hr` column is less than or equal to 24.
+
+
+#### 2.9 **Save Processed Time-Series Data**
+- **Objective**: Save the merged and filtered time-series data for further analysis.
+- **Why**: Provides a checkpoint for reproducibility and supports efficient debugging.
+- **How**:
+  - Save the processed time-series dataset as an RDS file.
+
+
+#### 2.10 **Merge Filtered Time-Series Data with `filtered_data`**
+- **Objective**: Combine the filtered demographic and admission data with time-series data for the first 24 hours.
+- **Why**: Integrates all relevant information into a single dataset for subsequent analysis and model building.
+- **How**:
+  - Left join the time-series data with `filtered_data` using `icustay_id`.
+
+
+#### 2.11 **Save Final Master Dataset**
+- **Objective**: Save the fully preprocessed dataset for predictive modeling and hypothesis testing.
+- **Why**: Ensures the final dataset is ready for downstream tasks and avoids repetition of preprocessing steps.
+- **How**:
+  - Save the final dataset (`master_data`) as an RDS file using `saveRDS`.
+
+
+```{r Load relevant tables, echo=FALSE}
+# Load relevant tables
+patients_tbl <- tables$patients
+admissions_tbl <- tables$admissions
+icustays_tbl <- tables$icustays
+pt_icu_outcome_tbl <- tables$pt_icu_outcome
+transfers_tbl <- tables$transfers
+icd9_diag_tbl <- tables$icd9_diag
+pt_weight_tbl <- tables$pt_weight
+bloodculture_tbl <- tables$bloodculture
+pt_stay_hr_tbl <- tables$pt_stay_hr
+vitals_hourly_tbl <- tables$vitals_hourly
+labs_hourly_tbl <- tables$labs_hourly
+gcs_hourly_tbl <- tables$gcs_hourly
+output_hourly_tbl <- tables$output_hourly
+```
+
+```{r MDROs, echo=FALSE}
+# Initialize `MDROs` column in `bloodculture_tbl` with default value FALSE
+bloodculture_tbl[, MDROs := FALSE]
+
+# Function to determine MDROs
+determine_MDROs <- function(data) {
+  # Replace NA in icustay_id with a specific value to treat them as a group
+  data[is.na(icustay_id), icustay_id := -1]
+  
+  # Create a grouped column `MDROs`
+  data[, MDROs := {
+    # Filter rows with the same hadm_id and icustay_id
+    bacteria_rows <- .SD[!is.na(org_name) & positiveculture == 1]
+    if (nrow(bacteria_rows) > 0) {
+      # Check for drug resistance for each bacteria type
+      unique_bacteria <- unique(bacteria_rows$org_name)
+      any(sapply(unique_bacteria, function(bacteria) {
+        all(bacteria_rows[org_name == bacteria]$antibioticresistance == "R")
+      }))
+    } else {
+      FALSE
+    }
+  }, by = .(hadm_id, icustay_id)]
+  
+  # Simplify the table
+  data[, .(hadm_id, icustay_id, MDROs)]
+}
+
+# Apply the function
+filtered_bloodculture_tbl <- determine_MDROs(bloodculture_tbl)
+
+# Remove duplicates
+filtered_bloodculture_tbl <- unique(filtered_bloodculture_tbl)
+
+# View the results
+summary(filtered_bloodculture_tbl)
+
+
+
+```
+```{r MDROs2, echo=FALSE}
+# Identify hadm_id with duplicated MDROs
+duplicated_mdros_check <- filtered_bloodculture_tbl[, .(
+  distinct_mdros_count = uniqueN(MDROs)
+), by = hadm_id]
+
+# Filter `hadm_id` with more than one distinct `MDROs` value
+duplicated_mdros <- duplicated_mdros_check[distinct_mdros_count > 1]
+
+# Remove rows where MDROs is FALSE for duplicated hadm_id
+filtered_bloodculture_tbl2 <- filtered_bloodculture_tbl[
+  !(hadm_id %in% duplicated_mdros$hadm_id & MDROs == FALSE)
+]
+
+# Ensure `hadm_id` has no duplicates
+# Keep only the first occurrence of each hadm_id
+filtered_bloodculture_tbl2 <- filtered_bloodculture_tbl2[, .SD[1], by = hadm_id]
+
+# Verify no duplicated hadm_id remains
+if (anyDuplicated(filtered_bloodculture_tbl2$hadm_id)) {
+  cat("Duplicates still exist for hadm_id.\n")
+} else {
+  cat("No duplicates exist for hadm_id.\n")
+}
+
+
+
+```
+
+```{r Data Preprocessing 0, echo=FALSE}
+# Step 1: Load pt_icu_outcome (61533 rows) as the base dataset
+base_data <- pt_icu_outcome_tbl
+
+# Step 2: Remove duplicates for icustay_id (keeping the first row for icustay_id = 229922)
+base_data <- base_data[!duplicated(base_data, by = "icustay_id")]
+
+# Step 3: Filter by Age (18 ≤ age ≤ 89)
+# Use age_years directly; exclude rows where age_years == 0 (over 89)
+base_data <- base_data[age_years >= 18 & age_years <= 89]
+
+# Step 4: Ensure no missing values in critical variables (expire_flag and intime)
+base_data <- base_data[!is.na(expire_flag) & !is.na(intime)]
+
+# Step 5: Save the filtered dataset
+filtered_data <- base_data  # Rename for clarity in further processing
+saveRDS(filtered_data, file.path(output_path, "filtered_data.rds"))
+
+# Step 6: Merge with filter merge
+
+# Merge ICU Stays table (61532 rows) on subject_id, hadm_id, and icustay_id
+filtered_data <- merge(
+  filtered_data,
+  icustays_tbl[, .(subject_id, hadm_id, icustay_id, first_careunit, last_careunit, first_wardid, last_wardid)],
+  by = c("subject_id", "hadm_id", "icustay_id"),
+  all.x = TRUE
+)
+
+# Merge Admissions table (58976 rows) on subject_id and hadm_id
+filtered_data <- merge(
+  filtered_data,
+  admissions_tbl[, .(subject_id, hadm_id, insurance, language, religion, marital_status, ethnicity,
+                     admission_type, admission_location, hospital_expire_flag, admittime, dischtime, deathtime)],
+  by = c("subject_id", "hadm_id"),
+  all.x = TRUE
+)
+
+# Merge ICD9 Diagnosis table
+filtered_data <- merge(
+  filtered_data,
+  icd9_diag_tbl[, .(subject_id, hadm_id, icd9_code)],
+  by = c("subject_id", "hadm_id"),
+  all.x = TRUE
+)
+
+# Step 7: Add Weekend Admission Flag
+Sys.setlocale("LC_TIME", "C")  # Ensure correct locale for weekday names
+filtered_data[, intime_weekdays := weekdays(as.Date(intime))]
+filtered_data[, is_weekend_admission := intime_weekdays %in% c("Saturday", "Sunday")]
+
+# Step 8: Retain the First ICU Admission per Patient
+# Ensure the earliest admission for each subject_id
+setorder(filtered_data, subject_id, intime)
+filtered_data <- filtered_data[, .SD[1], by = subject_id]
+```
+
+```{r Data Preprocessing 1, echo=FALSE}
+# Merge Patients table (46520 rows) on subject_id
+filtered_data2 <- merge(
+  filtered_data,
+  patients_tbl[, .(subject_id, gender, dob, expire_flag)],
+  by = "subject_id",
+  all.x = TRUE
+)
+
+# Merge Patient Weight table
+filtered_data2 <- merge(
+  filtered_data2,
+  pt_weight_tbl[, .(icustay_id, avg_weight_naive)],
+  by = "icustay_id",
+  all.x = TRUE
+)
+
+# Merge Blood Culture table
+filtered_data2 <- merge(
+  filtered_data2,
+  filtered_bloodculture_tbl2[, .(hadm_id, MDROs)],
+  by = "hadm_id",
+  all.x = TRUE
+)
+
+filtered_data2 <- unique(filtered_data2)
+
+# Save the final filtered dataset
+saveRDS(filtered_data2, file.path(output_path, "filtered_data_final.rds"))
+cat("Final filtered data saved with", nrow(filtered_data2), "rows and", ncol(filtered_data2), "columns.\n")
+```
+
+
+
+
+```{r Data Preprocessing 2, echo=FALSE}
+# Step 9: Merge Time-Series Data into `pt_stay_hr`
+# Merge each time-series table into `pt_stay_hr`
+time_series_data <- merge(pt_stay_hr_tbl, vitals_hourly_tbl, by = c("icustay_id", "hr"), all.x = TRUE)
+time_series_data <- merge(time_series_data, labs_hourly_tbl, by = c("icustay_id", "hr"), all.x = TRUE)
+time_series_data <- merge(time_series_data, gcs_hourly_tbl, by = c("icustay_id", "hr"), all.x = TRUE)
+time_series_data <- merge(time_series_data, output_hourly_tbl, by = c("icustay_id", "hr"), all.x = TRUE)
+
+# Save the merged Time-Series data
+saveRDS(time_series_data, file.path(output_path, "time_series_data_merged.rds"))
+
+# Step 10: Filter Merged Time-Series Data to First 24 Hours
+time_series_first24 <- time_series_data[hr > 0 & hr <= 24]
+
+# Save filtered Time-Series data
+saveRDS(time_series_first24, file.path(output_path, "time_series_data_first24.rds"))
+cat("Filtered Time-Series data saved with", nrow(time_series_first24), "rows and", ncol(time_series_first24), "columns.\n")
+```
+
+
+
+
+```{r Data Preprocessing 3, echo=FALSE}
+# Step 11: Merge Filtered Time-Series Data with `filtered_data`
+master_data <- merge(filtered_data2, time_series_first24, by = "icustay_id", all.x = TRUE)
+
+# Save final master dataset
+saveRDS(master_data, file.path(output_path, "master_data_final.rds"))
+
+# Verification
+cat("Updated Filtering and Merging Steps Completed.\n")
+cat("Filtered Dataset Rows:", nrow(filtered_data), "\n")
+cat("Master Dataset Rows:", nrow(master_data), "\n")
+cat("Master Dataset Columns:", ncol(master_data), "\n")
+
+```
+
+
+---
+
+## **Section 3: Exploratory Data Analysis (EDA)**
+
+### Objectives:
+- Understand the structure and relationships in the filtered data.
+- Identify trends, distributions, and potential outliers.
+- Evaluate key predictors and their correlations with the target variable (mortality).
+
+
+### Steps:
+#### **3.1 Basic Descriptive Statistics**:
+- **Objective**: Summarize the dataset to understand its structure and identify potential issues.
+- **Why**:
+  - Ensure numerical and categorical variables are within expected ranges.
+  - Identify missing values that may need handling during modeling.
+- **How**:
+  - Calculate summary statistics for numerical variables (mean, median, standard deviation, min, max).
+  - Tabulate categorical variables (frequency and proportions).
+  - Summarize missing values for all variables to identify those requiring imputation or exclusion.
+  - Stratify statistics by mortality (`EXPIRE_FLAG`) to detect differences between survivors and non-survivors.
+  
+#### **3.2 Target Variable Analysis**:
+- **Objective**: Understand the distribution of the target variable and its relationship with key features.
+- **Why**:
+  - Explore the prevalence of mortality (`EXPIRE_FLAG`).
+  - Analyze survival times for additional insights.
+- **How**:
+  - Visualize the distribution of mortality (`EXPIRE_FLAG`) as proportions or counts.
+  - Use histograms and bar plots to compare mortality trends across age groups, gender, and ICU types.
+  - Explore survival times using Kaplan-Meier curves or other survival analysis techniques.  
+  
+#### **3.3 Key Predictor Exploration**:
+- **Objective**: Investigate the distribution and predictive power of key clinical variables.
+- **Why**:
+  - Determine whether predictors show significant differences across mortality outcomes.
+  - Identify potential predictive patterns or outliers in vital signs and lab results.
+- **How**:
+  - Use boxplots and density plots to visualize distributions of vital signs and lab values.
+  - Focus on predictors with lower percentages of missing values to ensure robust analysis.
+  - Stratify by `EXPIRE_FLAG` to compare trends between survivors and non-survivors.
+
+#### **3.4 Correlation Analysis**:
+- **Objective**: 
+  - Focus on numerical variables in `master_data`.
+  - Address potential multicollinearity by identifying highly correlated variables (> 0.8 or < -0.8).
+- **Why**:
+  - Identify groups of correlated variables to avoid redundancy in modeling.
+  - Highlight potential key predictors.
+- **How**:
+  - Compute a correlation matrix for numerical variables using complete cases.
+  - Visualize correlations using a heatmap with hierarchical clustering to reveal relationships.
+
+
+#### **3.5 Demographics and ICU Characteristics**:
+- **Objective**: Explore the relationships between patient demographics, ICU characteristics, and mortality outcomes.
+- **Why**:
+  - Assess the impact of variables such as age, gender, and ICU type on mortality. 
+  - Investigate potential differences in outcomes between weekend and weekday admissions.
+- **How**:
+  - Analyze mortality rates across demographic groups (age, gender, ethnicity).
+  - Visualize age distribution and compare across survival groups.
+  - Visualize the distribution of ICU types (`first_careunit`) and their association with mortality.
+  - Assess the impact of weekend (`is_weekend_admission`) vs. weekday admissions.
+  - Perform t-tests for continuous variables (e.g., age).
+  - Use chi-squared tests for categorical variables (e.g., gender, ICU types).
+
+
+### **Insights of step 3.1 results**
+
+```{r Step 3.1, echo=FALSE}
+# Function to explore in-memory data frames
+explore_data <- function(data, table_name) {
+  # Print table summary
+  cat("\n### Summary of Table:", table_name, "###\n")
+  cat("Number of rows:", nrow(data), "\n")
+  cat("Number of columns:", ncol(data), "\n")
+  
+  # Create a summary table for column names and data types
+  summary_table <- data.frame(
+    Data_Type = sapply(data, function(col) class(col)[1]),  # Primary class only
+    Missing_Count = sapply(data, function(col) sum(is.na(col))),  # Count of missing values
+    Missing_Pct. = sapply(data, function(col) 
+      formatC(mean(is.na(col)) * 100, format = "f", digits = 2)  # Format to 2 decimal places
+    )
+  )
+  
+  # Print the summary table
+  cat("\nColumn names and data types:\n")
+  print(summary_table)
+  
+  cat("\n---\n")
+}
+
+# Explore `filtered_data`
+explore_data(filtered_data2, "final_filtered_data")
+
+# Explore `master_data`
+explore_data(master_data, "master_data")
+
+```
+
+#### **`Summary of final_filtered_data`**
+1. **Overall Dataset Shape**:
+   - **Rows**: 36,522
+   - **Columns**: 40
+2. **Key Observations**:
+   - Variables like `dod` and `ttd_days` have a significant percentage of missing values (61.18%).
+   - `deathtime` and `hosp_deathtime` has 89.18% anf 96.51%missing values, indicating most records lack time-of-death information.
+   - Most categorical fields have no missing values.
+   - All numeric values (`los`, `age`, `icu_los_hours`) are complete and ready for analysis.
+
+#### **Summary of `master_data`**
+1. **Overall Dataset Shape**:
+   - **Rows**: 375,552
+   - **Columns**: 83
+2. **Key Observations**:
+   - High missingness in many clinical variables (`creactiveprotein`, `alaninetransaminase`, etc.), with some exceeding 90%.
+   - Critical time-series variables (`spo2`, `temperature`, etc.) also show significant missingness, requiring imputation or exclusion strategies.
+   - Demographic and admission-related variables (`gender`, `ethnicity`, `admittime`) are fully populated, which is good for initial analysis.
+
+
+
+### **Observation and insights of step 3.2 results** 
+
+```{r Step 3.2, echo=FALSE}
+# Mortality Distribution
+# Update the labels for the x-axis
+filtered_data2$expire_flag_label <- ifelse(filtered_data2$expire_flag.x == 0, "Survived", "Died")
+# Create the bar plot
+ggplot(filtered_data2, aes(x = expire_flag_label)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Mortality Distribution",
+    x = "Outcome",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+
+# Mortality by Age Groups
+# Update the labels for the fill legend
+filtered_data2[, age_group := cut(
+  age_years, 
+  breaks = c(18, 40, 60, 80, 90), 
+  labels = c("18-39", "40-59", "60-79", "80-89"), 
+  right = FALSE  # Include lower bound, exclude upper bound
+)]
+filtered_data2[, expire_flag_label := ifelse(expire_flag.x == 0, "Survived", "Died")]
+
+# Create the updated bar plot
+ggplot(filtered_data2, aes(x = age_group, fill = expire_flag_label)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Mortality by Age Group",
+    x = "Age Group",
+    y = "Proportion"
+  ) +
+  scale_fill_manual(values = c("tomato", "lightblue"), name = "Outcome") +
+  theme_minimal()
+
+
+# Survival Analysis
+# Ensure the data contains no missing or invalid values
+filtered_data2 <- filtered_data2[!is.na(los) & !is.na(expire_flag.x), ]
+
+# Survival Analysis
+surv_object <- Surv(time = filtered_data2$los, event = filtered_data2$expire_flag.x)
+fit <- survfit(surv_object ~ 1, data = filtered_data2)  # Pass the data argument explicitly
+
+# Plot the survival curve
+ggsurvplot(fit, 
+           data = filtered_data2,  # Explicitly provide the data
+           conf.int = TRUE,       # Add confidence intervals
+           ggtheme = theme_minimal(), 
+           title = "Survival Analysis",
+           xlab = "Time (days)", 
+           ylab = "Survival Probability")
+
+```
+
+#### **Mortality Distribution**
+- **Observation**: 
+  - A larger proportion of ICU patients survived, as shown by the taller bar labeled "Survived."
+  - A smaller proportion of the patients did not survive ("Died").
+- **Insight**:
+  - The dataset is imbalanced, with a majority of the patients surviving. This imbalance could influence predictive modeling, requiring techniques like balancing the dataset or using metrics robust to class imbalance (e.g., F1 score, AUC).
+
+#### **Mortality by Age Group**
+- **Observation**:
+  - The mortality rate increases with age.
+  - In the age group 18–39, the proportion of patients who died is minimal compared to those who survived.
+  - In the 80–89 age group, a significant proportion of patients did not survive, nearly matching or exceeding the survivors.
+- **Insight**:
+  - Age is a critical factor influencing ICU outcomes, with older patients at a much higher risk of mortality.
+  - Predictive models should incorporate age as a key feature, potentially treating it as a non-linear variable to capture this trend.
+
+#### **Survival Analysis**
+- **Observation**:
+  - The survival probability drops steeply during the initial days of ICU stay and gradually levels off as time progresses.
+  - The steep decline indicates that the first few days in the ICU are critical for patient survival.
+- **Insight**:
+  - This suggests that immediate and intensive care during the initial period is crucial for improving survival rates.
+  - The leveling off of survival probability after a certain point may indicate a higher likelihood of recovery or stabilization for longer-staying patients.
+  - Survival analysis supports the hypothesis that time-dependent features and early intervention are vital for predicting mortality.
+
+
+
+### **Insights of step 3.3 results** 
+
+```{r Step 3.3 plots, echo=FALSE}
+# Prepare data for key predictor exploration
+key_predictors <- c("heartrate", "resprate", "spo2", "temperature", 
+                    "glucose.x", "creatinine", "lactate", "bicarbonate")
+
+# Filter data to include rows without missing values for selected predictors
+exploration_data <- master_data[, c(key_predictors, "expire_flag.x"), with = FALSE]
+exploration_data <- exploration_data[complete.cases(exploration_data), ]
+exploration_data[, expire_flag_label := ifelse(expire_flag.x == 0, "Survived", "Died")]
+
+# Plotting function for boxplots and density plots
+plot_key_predictors <- function(data, predictor) {
+  # Boxplot
+  boxplot <- ggplot(data, aes(x = expire_flag_label, y = get(predictor), fill = expire_flag_label)) +
+    geom_boxplot(outlier.alpha = 0.3) +
+    labs(
+      title = paste("Boxplot of", predictor, "by Outcome"),
+      x = "Outcome",
+      y = predictor
+    ) +
+    scale_fill_manual(values = c("lightblue", "tomato"), name = "Outcome") +
+    theme_minimal()
+  
+  # Density Plot
+  density_plot <- ggplot(data, aes(x = get(predictor), fill = expire_flag_label)) +
+    geom_density(alpha = 0.6) +
+    labs(
+      title = paste("Density Plot of", predictor, "by Outcome"),
+      x = predictor,
+      y = "Density"
+    ) +
+    scale_fill_manual(values = c("lightblue", "tomato"), name = "Outcome") +
+    theme_minimal()
+  
+  # Combine and return plots
+  list(Boxplot = boxplot, Density = density_plot)
+}
+
+# Generate and display plots for each key predictor
+for (predictor in key_predictors) {
+  cat("\n--- Visualizations for", predictor, "---\n")
+  plots <- plot_key_predictors(exploration_data, predictor)
+  print(plots$Boxplot)
+  print(plots$Density)
+}
+
+
+```
+
+
+
+
+```{r Step 3.3 Statistical test, echo=FALSE}
+stat_results <- lapply(key_predictors, function(var) {
+  test <- t.test(master_data[[var]] ~ master_data$expire_flag.x, na.action = na.omit)
+  return(data.frame(
+    Variable = var,
+    P_Value = test$p.value,
+    Mean_Survived = test$estimate[1],
+    Mean_Died = test$estimate[2]
+  ))
+})
+
+stat_summary <- do.call(rbind, stat_results)
+stat_summary <- stat_summary[order(stat_summary$P_Value), ]  # Sort by p-value
+print(stat_summary)
+
+# Categorical Variables
+categorical_vars <- c("gender", "first_careunit", "intime_weekdays", "is_weekend_admission")
+cat_results <- lapply(categorical_vars, function(var) {
+  table_data <- table(master_data[[var]], master_data$expire_flag.x)
+  p_value <- chisq.test(table_data)$p.value
+  return(data.frame(Variable = var, P_Value = p_value))
+})
+cat_summary <- do.call(rbind, cat_results)
+cat_summary <- cat_summary[order(cat_summary$P_Value), ]  # Sort by p-value
+print(cat_summary)
+
+```
+
+
+#### **Statistical Test Results**:
+   - Variables like `resprate`, `creatinine`, `glucose.x`, and `lactate` show strong statistical significance (p-values close to 0), indicating a clear difference between survivors and non-survivors.
+   - Less significant variables such as `spo2` (p-value ~0.30) may not contribute significantly to outcome prediction.
+
+#### **Categorical Variable Analysis**:
+   - Categorical predictors like `first_careunit` and `intime_weekdays` exhibit highly significant associations with mortality (p-values ~0), suggesting these are strong predictors.
+   - The variable `is_weekend_admission` shows weaker significance but is still worth considering due to its contextual relevance.
+
+```{r Step 3.3 Logistic Regression, echo=FALSE}
+# Logistic Regression to Identify Significant Predictors
+log_model <- glm(expire_flag.x ~ heartrate + resprate + spo2 + temperature + glucose.x +
+                   creatinine + lactate + bicarbonate + gender + first_careunit + 
+                   is_weekend_admission, 
+                 data = master_data, family = "binomial")
+
+summary(log_model)  # Displays coefficients and significance levels
+
+```
+
+
+#### **Logistic Regression**:
+   - Predictors like `creatinine`, `lactate`, and certain ICU units (`first_careunitCSRU` and `first_careunitTSICU`) are statistically significant with strong effects.
+   - Variables such as `gender` and `is_weekend_admission` are not significant, indicating limited predictive value for mortality.
+
+
+```{r Step 3.3 Random Forest Feature Importance, echo=FALSE}
+# Random Forest for Feature Importance
+rf_model <- randomForest(expire_flag.x ~ heartrate + resprate + spo2 + temperature + glucose.x +
+                           creatinine + lactate + bicarbonate + gender + first_careunit + 
+                           is_weekend_admission,
+                         data = master_data, na.action = na.omit)
+importance <- importance(rf_model)
+print(importance)
+
+# Plot Feature Importance
+varImpPlot(rf_model, main = "Random Forest Feature Importance")
+
+
+```
+#### **Random Forest Feature Importance**:
+   - Top predictors include `creatinine`, `lactate`, `glucose.x`, and `temperature`, aligning with both t-test and logistic regression results.
+   - Categorical variables like `first_careunit` also play a significant role, reaffirming their importance.
+
+
+
+### **Observation and insights of step 3.4 results** 
+
+```{r Step 3.4 Subsetting, echo=FALSE}
+# Define the subset of clinically important variables
+clinically_important_vars <- c(
+  "los", "age_years", "avg_weight_naive", "spo2", "fio2", "temperature", 
+  "resprate", "heartrate", "sysbp", "diasbp", "glucose.x", 
+  "meanarterialpressure", "neutrophil", "creactiveprotein", 
+  "whitebloodcell", "partialpressureo2", "bicarbonate", "lactate", 
+  "troponin", "bloodureanitrogen", "creatinine", 
+  "alaninetransaminase", "aspartatetransaminase", "hemoglobin", 
+  "intnormalisedratio", "platelets", "albumin", "chloride", 
+  "glucose.y", "sodium", "bilirubin", "hematocrit", "urineoutput",
+  "gcs", "gcseyes", "gcsmotor", "gcsverbal", "MDROs", "endotrachflag", 
+  "first_careunit", "last_careunit", "gender"
+)
+
+
+# Subset the clinically important variables
+clinical_data <- master_data[, ..clinically_important_vars]
+
+# Calculate the missing data percentage for each variable
+missing_data_summary <- data.frame(
+  Variable = names(clinical_data),
+  Missing_Count = sapply(clinical_data, function(col) sum(is.na(col))),
+  Missing_Pct = sapply(clinical_data, function(col) 
+    formatC(mean(is.na(col)) * 100, format = "f", digits = 2)) # Format as percentage
+)
+
+# Print the summary table
+cat("### Missing Data Summary for Clinically Important Variables ###\n")
+print(missing_data_summary)
+
+# Plot missing data percentages
+ggplot(missing_data_summary, aes(x = reorder(Variable, as.numeric(Missing_Pct)), y = as.numeric(Missing_Pct))) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Missing Data Percentage by Variable", x = "Variable", y = "Missing Data (%)") +
+  theme_minimal()
+
+
+```
+
+
+#### **Missing Data Analysis**
+   - Missing data percentages are clearly calculated and visualized.
+   - Variables with significant missingness, such as `creactiveprotein` (99.97%) and `neutrophil` (99.12%), highlight potential candidates for exclusion or imputation.
+
+```{r Step 3.4 Correlation Analysis, echo=FALSE}
+# Step 1: Remove columns with more than a threshold of missing data
+apply_threshold <- TRUE  # Set to TRUE to apply missing data filtering
+threshold <- 0.85  # Set the missing data threshold
+
+if (apply_threshold) {
+  # Identify numeric columns and apply threshold for missing data
+  numeric_clinical_data <- names(clinical_data)[sapply(clinical_data, is.numeric)]
+  clinical_data <- clinical_data[, ..numeric_clinical_data]
+  clinical_data <- clinical_data[, lapply(.SD, function(col) {
+    if (mean(is.na(col)) <= threshold) return(col)
+    NULL  # Drop columns with too much missing data
+  })]
+}
+
+# Step 2: Remove rows with missing data
+clinical_data <- na.omit(clinical_data)
+
+# Step 3: Compute the correlation matrix
+cor_matrix_numeric <- cor(clinical_data, use = "complete.obs")
+
+# Step 4: Visualize the correlation matrix using a heatmap with `corrplot`
+library(corrplot)
+corrplot(cor_matrix_numeric,
+         method = "color",
+         type = "lower",
+         order = "hclust", 
+         tl.col = "black", 
+         tl.srt = 45,  # Rotate text labels
+         title = "Correlation Heatmap for Numeric Variables",
+         mar = c(0, 0, 1, 0))
+
+```
+#### **Correlation Analysis**
+   - The correlation heatmap effectively visualizes relationships among numeric variables.
+   - Significant correlations, such as `gcs` and its subcomponents (`gcseyes`, `gcsmotor`, `gcsverbal`) and blood pressure (`sysbp`, `disabp`, `meanarterialpressure`), are expected due to their clinical relationships.
+   - Variables like `gcs` and its subcomponents might exhibit multicollinearity. Consider removing highly correlated variables before regression or model training.
+   - The negative correlation of `gcsverbal` and `endotrachflag` makes sense as intubation often impairs verbal response.
+
+
+
+```{r Step 3.4 highly correlated variable pairs, echo=FALSE}
+# Step 5: Identify highly correlated variable pairs
+high_corr_pairs_numeric <- which(abs(cor_matrix_numeric) > 0.8 & abs(cor_matrix_numeric) < 1, arr.ind = TRUE)
+
+# Check if there are highly correlated variable pairs
+if (is.null(high_corr_pairs_numeric) || nrow(high_corr_pairs_numeric) == 0) {
+  cat("\nNo highly correlated numeric variable pairs found.\n")
+} else {
+  # Avoid duplicates and create a table of highly correlated variable pairs
+  high_corr_pairs_numeric <- high_corr_pairs_numeric[high_corr_pairs_numeric[, 1] < high_corr_pairs_numeric[, 2], ]
+  
+  high_corr_table_numeric <- data.frame(
+    Var1 = rownames(cor_matrix_numeric)[high_corr_pairs_numeric[, 1]],
+    Var2 = colnames(cor_matrix_numeric)[high_corr_pairs_numeric[, 2]],
+    Correlation = cor_matrix_numeric[high_corr_pairs_numeric]
+  )
+  
+  # Print highly correlated variable pairs
+  cat("\nHighly Correlated Numeric Variable Pairs:\n")
+  print(high_corr_table_numeric)
+}
+
+# Step 6: Save the filtered clinical data and correlation matrix
+saveRDS(clinical_data, file.path(output_path, "filtered_clinical_data.rds"))
+saveRDS(cor_matrix_numeric, file.path(output_path, "correlation_matrix_numeric.rds"))
+
+cat("Data filtering and correlation analysis completed.\n")
+
+
+```
+If highly correlated numeric variable pairs found，use Principal Component Analysis (PCA) or select one representative variable from each correlated group to avoid redundancy in predictive modeling.
+
+
+
+### **Insights of step 3.5 results**
+```{r Step 3.5.1 Demographics_1, echo=FALSE}
+# Create a combined plot for age, gender, and survival status
+ggplot(master_data, aes(x = age_years, fill = interaction(gender, expire_flag.x))) +
+  geom_histogram(data = subset(master_data, expire_flag.x == 0),  # Survived data
+                 aes(y = ..count..), binwidth = 5, position = "dodge", alpha = 0.7) +
+  geom_histogram(data = subset(master_data, expire_flag.x == 1),  # Died data
+                 aes(y = -..count..), binwidth = 5, position = "dodge", alpha = 0.7) +
+  labs(
+    title = "Age and Gender Distribution by Survival Status",
+    x = "Age (years)",
+    y = "Count (Negative/Left: Died | Positive/Right: Survived)",
+    fill = "Gender and Survival"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "F.0" = "tomato",   # Female Survived
+      "M.0" = "lightblue",  # Male Survived
+      "F.1" = "#B22222",  # Female Died (darker red for shadow effect)
+      "M.1" = "#4682B4"   # Male Died (darker blue for shadow effect)
+    ),
+    labels = c(
+      "F.0" = "Female (Survived)", 
+      "M.0" = "Male (Survived)", 
+      "F.1" = "Female (Died)", 
+      "M.1" = "Male (Died)"
+    )
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  ) +
+  coord_flip() +
+  scale_y_continuous(labels = abs, breaks = scales::breaks_pretty(n = 10))  # Show positive labels for both axes
+
+# Perform t-test for age
+age_ttest <- t.test(age_years ~ expire_flag.x, data = master_data, na.action = na.omit)
+cat("\nT-Test for Age by Mortality Status:\n")
+print(age_ttest)
+
+## Gender Distribution by Mortality
+gender_table <- table(master_data$gender, master_data$expire_flag.x)
+cat("\nGender Distribution by Mortality:\n")
+print(gender_table)
+
+# Chi-squared test for gender
+gender_chisq <- chisq.test(gender_table)
+cat("\nChi-Squared Test for Gender by Mortality:\n")
+print(gender_chisq)
+```
+
+#### **Age and gender Distribution:**
+1. **Visualization:**
+   - Mortality is higher among older age groups for both genders, with non-survivor bars dominating at higher ages.
+   - Males have a slightly higher proportion of survivors in the younger age groups compared to females.
+   - The overlap in the middle age range indicates similar mortality rates between genders for these age categories.
+2. **Statistical Test:**
+   - The Welch Two Sample t-test reveals a statistically significant difference in the mean age of survivors (57.95 years) and non-survivors (68.57 years), with a p-value < 2.2e-16. This highlights that age is a critical factor associated with mortality.
+   - The mortality is slightly higher among males (59.02% of non-survivors) compared to females (40.98% of non-survivors).
+   - The Chi-squared test confirms a significant association between gender and mortality (p-value < 2.2e-16). However, the effect size would need further exploration to assess its clinical relevance.
+
+
+
+```{r Step 3.5.1 Demographics_2, echo=FALSE}
+# Define the categorical variables
+categorical_vars <- c("insurance", "religion", "marital_status")
+
+# Loop over each variable to generate plots
+for (var in categorical_vars) {
+  print(
+    ggplot(master_data, aes(x = .data[[var]], fill = as.factor(expire_flag.x))) +
+      geom_bar(position = "fill", alpha = 0.7) +
+      labs(
+        title = paste("Distribution of", var, "by Mortality Status"),
+        x = var,
+        y = "Proportion",
+        fill = "Survival Status"
+      ) +
+      scale_fill_manual(
+        values = c("0" = "lightblue", "1" = "tomato"),
+        labels = c("Survived", "Died")
+      ) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for readability
+        legend.title = element_text(size = 10),
+        legend.text = element_text(size = 9)
+      )
+  )
+}
+
+```
+
+```{r Step 3.5.1 Demographics_3, echo=FALSE}
+# Function to calculate count and percentage
+calculate_counts_percentages <- function(column_name, data) {
+  # Create a summary table
+  summary_table <- data[, .(
+    Count = .N,
+    Percentage = (.N / nrow(data)) * 100
+  ), by = column_name]
+  
+  # Order by count in descending order
+  summary_table <- summary_table[order(-Count)]
+  
+  # Rename column for clarity
+  setnames(summary_table, column_name, "Category")
+  
+  return(summary_table)
+}
+
+# Calculate counts and percentages for 'language'
+language_summary <- calculate_counts_percentages("language", master_data)
+
+# Calculate counts and percentages for 'ethnicity'
+ethnicity_summary <- calculate_counts_percentages("ethnicity", master_data)
+
+# Print the summaries
+cat("Language Distribution:\n")
+print(language_summary)
+
+cat("\nEthnicity Distribution:\n")
+print(ethnicity_summary)
+```
+
+
+```{r Step 3.5.1 Demographics_4, echo=FALSE}
+# Filter the 'language' variable for categories with counts >= 500 and exclude NA or empty strings
+filtered_language_data <- master_data %>%
+  filter(!is.na(language) & language != "") %>%
+  group_by(language) %>%
+  filter(n() >= 500) %>%
+  ungroup()
+
+# Calculate the overall proportions of mortality for all patients
+overall_proportions <- master_data %>%
+  filter(!is.na(expire_flag.x)) %>%
+  group_by(expire_flag.x) %>%
+  summarise(Proportion = n() / nrow(master_data)) %>%
+  mutate(language = "All")
+
+# Combine overall proportions with filtered data
+combined_language_data <- filtered_language_data %>%
+  group_by(language, expire_flag.x) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Proportion = Count / sum(Count)) %>%
+  bind_rows(overall_proportions)
+
+# Create the plot
+ggplot(combined_language_data, aes(x = language, fill = as.factor(expire_flag.x), y = Proportion)) +
+  geom_bar(stat = "identity", position = "fill", alpha = 0.7) +
+  labs(
+    title = "Distribution of Language by Mortality Status (With Overall >500)",
+    x = "Language",
+    y = "Proportion",
+    fill = "Survival Status"
+  ) +
+  scale_fill_manual(
+    values = c("0" = "lightblue", "1" = "tomato"),
+    labels = c("Survived", "Died")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for readability
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+```
+
+```{r Step 3.5.1 Demographics_5, echo=FALSE}
+# Define a mapping for broader ethnicity groups
+ethnicity_mapping <- list(
+  "White" = c(
+    "WHITE", "WHITE - RUSSIAN", "WHITE - OTHER EUROPEAN", 
+    "WHITE - BRAZILIAN", "WHITE - EASTERN EUROPEAN"
+  ),
+  "Black/African American" = c(
+    "BLACK/AFRICAN AMERICAN", "BLACK/CAPE VERDEAN", 
+    "BLACK/HAITIAN", "BLACK/AFRICAN"
+  ),
+  "Asian" = c(
+    "ASIAN", "ASIAN - CHINESE", "ASIAN - ASIAN INDIAN", 
+    "ASIAN - VIETNAMESE", "ASIAN - OTHER", "ASIAN - FILIPINO",
+    "ASIAN - CAMBODIAN", "ASIAN - KOREAN", "ASIAN - JAPANESE", 
+    "ASIAN - THAI"
+  ),
+  "Hispanic/Latino" = c(
+    "HISPANIC OR LATINO", "HISPANIC/LATINO - PUERTO RICAN", 
+    "HISPANIC/LATINO - DOMINICAN", "HISPANIC/LATINO - GUATEMALAN",
+    "HISPANIC/LATINO - CUBAN", "HISPANIC/LATINO - SALVADORAN", 
+    "HISPANIC/LATINO - MEXICAN", "HISPANIC/LATINO - COLOMBIAN",
+    "HISPANIC/LATINO - CENTRAL AMERICAN (OTHER)", "SOUTH AMERICAN",
+    "HISPANIC/LATINO - HONDURAN"
+  ),
+  "Other" = c(
+    "MULTI RACE ETHNICITY", "CARIBBEAN ISLAND", "PORTUGUESE",
+    "MIDDLE EASTERN", "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER", 
+    "AMERICAN INDIAN/ALASKA NATIVE", "AMERICAN INDIAN/ALASKA NATIVE FEDERALLY RECOGNIZED TRIBE"
+  ),
+  "Unknown" = c(
+    "UNKNOWN/NOT SPECIFIED", "UNABLE TO OBTAIN", 
+    "PATIENT DECLINED TO ANSWER"
+  )
+)
+
+# Map detailed ethnicity into broader groups
+master_data$ethnicity_group <- sapply(master_data$ethnicity, function(eth) {
+  for (group in names(ethnicity_mapping)) {
+    if (eth %in% ethnicity_mapping[[group]]) return(group)
+  }
+  return("Other")  # Default group for unmapped categories
+})
+
+# Filter data to exclude NA and calculate overall proportions
+filtered_ethnicity_data <- master_data %>%
+  filter(!is.na(ethnicity_group)) %>%
+  group_by(ethnicity_group) %>%
+  summarise(Count = n()) %>%
+  filter(Count >= 500) %>%  # Include only categories with 500 or more
+  ungroup()
+
+# Calculate proportions for each mortality status within ethnicity groups
+ethnicity_mortality_data <- master_data %>%
+  filter(!is.na(ethnicity_group)) %>%
+  group_by(ethnicity_group, expire_flag.x) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Proportion = Count / sum(Count))
+
+# Add overall proportions for all patients
+overall_ethnicity_proportions <- master_data %>%
+  filter(!is.na(expire_flag.x)) %>%
+  group_by(expire_flag.x) %>%
+  summarise(Proportion = n() / nrow(master_data)) %>%
+  mutate(ethnicity_group = "All")
+
+# Combine data
+final_ethnicity_data <- bind_rows(ethnicity_mortality_data, overall_ethnicity_proportions)
+
+# Plot
+ggplot(final_ethnicity_data, aes(x = ethnicity_group, fill = as.factor(expire_flag.x), y = Proportion)) +
+  geom_bar(stat = "identity", position = "fill", alpha = 0.7) +
+  labs(
+    title = "Distribution of Ethnicity by Mortality Status (Filtered and Grouped)",
+    x = "Ethnicity Group",
+    y = "Proportion",
+    fill = "Survival Status"
+  ) +
+  scale_fill_manual(
+    values = c("0" = "lightblue", "1" = "tomato"),
+    labels = c("Survived", "Died")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+```
+
+
+
+
+
+
+```{r Step 3.5.2 ICU Characteristics, echo=FALSE}
+# ICU Type Distribution by Mortality
+ggplot(master_data, aes(x = first_careunit, fill = as.factor(expire_flag.x))) +
+  geom_bar(position = "fill", alpha = 0.7) +
+  labs(
+    title = "ICU Type Distribution by Mortality Status",
+    x = "ICU Type (First Care Unit)",
+    y = "Proportion",
+    fill = "Survival Status"
+  ) +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "tomato"), labels = c("Survived", "Died")) +
+  theme_minimal()
+
+# Chi-squared test for ICU types
+icu_table <- table(master_data$first_careunit, master_data$expire_flag.x)
+cat("\nICU Type Distribution by Mortality:\n")
+print(icu_table)
+
+icu_chisq <- chisq.test(icu_table)
+cat("\nChi-Squared Test for ICU Type by Mortality:\n")
+print(icu_chisq)
+
+```
+
+#### **ICU Characteristics:**
+1. **Visualization Insights**:
+  - **CCU (Coronary Care Unit)**: Patients in CCU have a moderate mortality rate, reflecting the focused care for cardiac conditions.
+  - **CSRU (Cardiac Surgery Recovery Unit)**: This unit has one of the lowest mortality rates, likely due to the controlled recovery environment post-surgery.
+  - **MICU (Medical Intensive Care Unit)**: The highest mortality rate is observed here, which is expected given its focus on managing critical medical conditions.
+  - **SICU (Surgical Intensive Care Unit)**: Mortality rates are moderate, possibly related to complex post-surgical care cases.
+  - **TSICU (Trauma/Surgical Intensive Care Unit)**: The lowest mortality rate suggests effective care for trauma/surgical emergencies.
+
+2. **Statistical Analysis**:
+  - The chi-squared test for ICU type by mortality yields a **highly significant result** (p-value < 2.2e-16), indicating a strong association between ICU type and mortality status.
+
+3. **Clinical Interpretation**:
+  - The results suggest that ICU type is a critical factor influencing patient outcomes.
+  - MICU patients, likely being the most critically or complexity  ill, exhibit a substantially higher mortality rate.
+  - Further analysis could explore patient characteristics (e.g., age, comorbidities) within each ICU type to better understand these differences.
+
+
+
+```{r Step 3.5.3 Weekend vs. Weekday Admissions, echo=FALSE}
+# Bar Plot for Weekend Admission by Mortality
+ggplot(master_data, aes(x = is_weekend_admission, fill = as.factor(expire_flag.x))) +
+  geom_bar(position = "fill", alpha = 0.7) +
+  labs(
+    title = "Weekend vs. Weekday Admissions by Mortality Status",
+    x = "Admission Type",
+    y = "Proportion",
+    fill = "Survival Status"
+  ) +
+  scale_x_discrete(labels = c("FALSE" = "Weekday Admissions", "TRUE" = "Weekend Admissions")) +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "tomato"), labels = c("Survived", "Died")) +
+  theme_minimal()
+
+
+# Chi-squared test for weekend admissions
+weekend_table <- table(master_data$is_weekend_admission, master_data$expire_flag.x)
+cat("\nWeekend Admission Distribution by Mortality:\n")
+print(weekend_table)
+
+weekend_chisq <- chisq.test(weekend_table)
+cat("\nChi-Squared Test for Weekend Admission by Mortality:\n")
+print(weekend_chisq)
+
+# Save Demographics and ICU Characteristics Results
+demographics_icu_results <- list(
+  age_ttest = age_ttest,
+  gender_chisq = gender_chisq,
+  icu_chisq = icu_chisq,
+  weekend_chisq = weekend_chisq
+)
+saveRDS(demographics_icu_results, file.path(output_path, "demographics_icu_results.rds"))
+
+
+```
+
+#### **Weekend vs. Weekday Admissions:**
+1. **Visualization Insights**:
+  - **Weekday Admissions (FALSE)**: Higher total admissions compared to weekends, with a slightly lower proportion of mortality.
+  - **Weekend Admissions (TRUE)**: Lower total admissions, with a slightly higher mortality proportion compared to weekdays.
+
+2. **Statistical Analysis**:
+  - The chi-squared test (p-value < 2.2e-16) confirms a statistically significant association between weekend admissions and mortality. This suggests a potential difference in outcomes based on the day of admission.
+
+3. **Clinical Interpretation**:
+  - The slightly higher mortality proportion for weekend admissions may reflect differences in resource availability, staffing, or severity of cases during weekends. Further investigation into staffing levels, patient profiles, and care processes during weekends is recommended.
+  - Hospitals could consider optimizing weekend staffing and resources to ensure consistent care quality throughout the week.
+
+
+
+---
+
+## **Section 4: Feature Engineering**
+
+### Objectives:
+- Create meaningful features to enhance the predictive power of the dataset.
+- Transform raw time-series data into aggregated features suitable for machine learning models.
+
+### Steps:
+1. **Aggregate Time-Series Data**:
+  - Identify key vitals/lab variables and define clinical thresholds for abnormal values.
+  - Generate flags for abnormal values (e.g., heart rate > 120 bpm, lactate > 4 mmol/L).
+
+2. **Feature Transformation**:
+  - Standardization: Apply z-score normalization to continuous variables (e.g., age, vitals, labs).
+  - Categorical Encoding: Convert categorical variables (e.g., ICU type, gender) to one-hot encoding.
+
+3. **Interaction and Derived Features**:
+  - Interaction Terms: Create interaction terms for meaningful combinations (e.g., age × ICU type, age × lactate).
+  - Calculate clinically relevant ratios, such as:
+    - Systolic/diastolic blood pressure (sysbp/diasbp).
+    - BUN/creatinine ratio.
+  - Cumulative Measures: Add aggregate features like total urine output in the first 24 hours.
+
+
+
+
+
+```{r Step 4.1, echo=FALSE}
+# Define abnormal thresholds for key variables (including normal ranges)
+abnormal_thresholds <- list(
+  heartrate = list(upper = 120, lower = 60),   # Normal range: 60-120 bpm
+  lactate = list(upper = 2, lower = 0.5),      # Normal range: 0.5-2 mmol/L
+  spo2 = list(lower = 94),                    # Normal range: ≥ 94%
+  sysbp = list(upper = 140, lower = 90),      # Normal range: 90-140 mmHg
+  gcs = list(lower = 13)                      # Normal range: ≥ 13
+)
+
+# Create binary flags for normal ranges and abnormal values
+for (var in names(abnormal_thresholds)) {
+  # Normal range flag
+  master_data[[paste0(var, "_normal")]] <- as.integer(
+    master_data[[var]] >= abnormal_thresholds[[var]]$lower & 
+    master_data[[var]] <= (abnormal_thresholds[[var]]$upper %||% Inf)  # Handle cases without an upper threshold
+  )
+  
+  # Abnormally high flag
+  if (!is.null(abnormal_thresholds[[var]]$upper)) {
+    master_data[[paste0(var, "_high")]] <- as.integer(master_data[[var]] > abnormal_thresholds[[var]]$upper)
+  }
+  
+  # Abnormally low flag
+  if (!is.null(abnormal_thresholds[[var]]$lower)) {
+    master_data[[paste0(var, "_low")]] <- as.integer(master_data[[var]] < abnormal_thresholds[[var]]$lower)
+  }
+}
+
+# Summarize counts for normal and abnormal values
+normal_flag_summary <- master_data %>%
+  select(ends_with("_normal"), ends_with("_high"), ends_with("_low")) %>%
+  summarise_all(~ sum(., na.rm = TRUE))
+
+print("Summary of Normal and Abnormal Flags:")
+print(normal_flag_summary)
+
+# Plot Distribution of Normal and Abnormal Values by Mortality Status
+normal_flag_data <- master_data %>%
+  select(ends_with("_normal"), ends_with("_high"), ends_with("_low"), expire_flag.x) %>%
+  pivot_longer(-expire_flag.x, names_to = "Flag_Type", values_to = "Flag_Status") %>%
+  filter(Flag_Status == 1) %>%
+  group_by(Flag_Type, expire_flag.x) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Proportion = Count / sum(Count))
+
+# Create the plot
+ggplot(normal_flag_data, aes(x = Flag_Type, y = Proportion, fill = as.factor(expire_flag.x))) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
+  labs(
+    title = "Distribution of Normal and Abnormal Flags by Mortality Status",
+    x = "Flag Type",
+    y = "Proportion",
+    fill = "Mortality Status"
+  ) +
+  scale_fill_manual(
+    values = c("0" = "lightblue", "1" = "tomato"),
+    labels = c("Survived", "Died")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for better readability
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+```
+
+```{r Step 4.1 sup, echo=FALSE}
+# Reshape data to include normal and abnormal flags
+binary_flags_long <- master_data %>%
+  select(ends_with("_normal"), ends_with("_high"), ends_with("_low"), expire_flag.x) %>%
+  pivot_longer(
+    cols = -expire_flag.x,
+    names_to = "Flag",
+    values_to = "Value"
+  ) %>%
+  filter(Value == 1)  # Only include rows where the flag is triggered
+
+# Plot the distribution of normal and abnormal flags by mortality
+ggplot(binary_flags_long, aes(x = Flag, fill = as.factor(expire_flag.x))) +
+  geom_bar(position = "fill", alpha = 0.7) +
+  labs(
+    title = "Distribution of Normal and Abnormal Flags by Mortality Status",
+    x = "Binary Flags",
+    y = "Proportion",
+    fill = "Survival Status"
+  ) +
+  scale_fill_manual(
+    values = c("0" = "lightblue", "1" = "tomato"),
+    labels = c("Survived", "Died")
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels for readability
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+
+```
+
+
+
+
+
+
+---
+
+
+
+```{r Step 4.2 Feature Transformation, echo=FALSE}
+# Define continuous variables for standardization
+continuous_vars <- c(
+  "age_years", "spo2", "temperature", "resprate", "heartrate",
+  "sysbp", "diasbp", "glucose.x", "lactate", "bicarbonate", "creatinine"
+)
+
+# Standardize continuous variables
+standardized_data <- master_data %>%
+  mutate(across(all_of(continuous_vars), ~ scale(.)[, 1], .names = "z_{.col}"))
+
+# Define categorical variables for one-hot encoding
+categorical_vars <- c("gender", "first_careunit", "insurance", "religion", "marital_status")
+
+# Perform one-hot encoding
+encoded_data <- standardized_data %>%
+  mutate(across(all_of(categorical_vars), as.factor)) %>%
+  tidyr::pivot_wider(
+    names_from = all_of(categorical_vars),
+    values_from = all_of(categorical_vars),
+    values_fn = length,
+    values_fill = 0
+  )
+
+# Save the transformed dataset
+saveRDS(encoded_data, file = "feature_transformed_data.rds")
+
+# Summary
+cat("Feature transformation completed: Standardized continuous variables and one-hot encoded categorical variables.\n")
+
+```
+```{r Step 4.2 Visualization_1, echo=FALSE}
+# Visualize distributions of standardized variables
+standardized_long <- standardized_data %>%
+  select(starts_with("z_")) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  filter(is.finite(Value))  # Filter out non-finite values (NA, Inf, -Inf)
+
+# Optionally, remove extreme outliers (z-scores beyond a threshold, e.g., -5 to 5)
+standardized_long <- standardized_long %>%
+  filter(Value > -5 & Value < 5)
+
+ggplot(standardized_long, aes(x = Value, fill = Variable)) +
+  geom_density(alpha = 0.7) +
+  facet_wrap(~ Variable, scales = "free", ncol = 3) +
+  labs(
+    title = "Distribution of Standardized Variables",
+    x = "Z-Score Value",
+    y = "Density"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+
+
+```{r r Step 4.2 Visualization_2, echo=FALSE}
+# Visualize one-hot encoded variable counts
+encoded_summary <- master_data %>%
+  select(all_of(categorical_vars)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Category") %>%
+  filter(!is.na(Category)) %>%
+  count(Variable, Category)
+
+ggplot(encoded_summary, aes(x = Category, y = n, fill = Variable)) +
+  geom_bar(stat = "identity", alpha = 0.7) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  labs(
+    title = "Counts of One-Hot Encoded Categorical Variables",
+    x = "Category",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+
+```
+
+
+
+```{r r Step 4.2 Visualization_3, echo=FALSE}
+# Visualize proportions by categorical variables
+for (var in categorical_vars) {
+  print(
+    ggplot(master_data, aes(x = .data[[var]], fill = as.factor(expire_flag.x))) +
+      geom_bar(position = "fill", alpha = 0.7) +
+      labs(
+        title = paste("Proportion of Mortality by", var),
+        x = var,
+        y = "Proportion",
+        fill = "Survival Status"
+      ) +
+      scale_fill_manual(
+        values = c("0" = "lightblue", "1" = "tomato"),
+        labels = c("Survived", "Died")
+      ) +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  )
+}
+
+
+```
+
+
+
+```{r Step 4.3 Interaction , echo=FALSE}
+# Add interaction terms
+interaction_data <- master_data %>%
+  filter(!is.na(age_years), !is.na(lactate)) %>%  # Ensure no NA values in the variables
+  mutate(
+    age_lactate = age_years * lactate  # Interaction between age and lactate
+  ) %>%
+  filter(is.finite(age_lactate))  # Ensure no non-finite values in the interaction term
+
+# Plot distribution of interaction terms
+ggplot(interaction_data, aes(x = age_lactate)) +
+  geom_density(fill = "lightblue", alpha = 0.7) +
+  labs(
+    title = "Distribution of Age × Lactate Interaction Term",
+    x = "Age × Lactate",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+```
+
+
+
+```{r Step 4.3 Ratios, echo=FALSE}
+# Add ratio features and filter for plausible values
+ratio_data <- master_data %>%
+  mutate(
+    sysbp_diasbp_ratio = ifelse(sysbp > 0 & diasbp > 0, sysbp / diasbp, NA),  # Ensure valid values for ratio
+    bun_creatinine_ratio = ifelse(creatinine > 0, bloodureanitrogen / creatinine, NA)  # Ensure valid denominator
+  ) %>%
+  mutate(
+    sysbp_diasbp_ratio = ifelse(sysbp_diasbp_ratio > 10 | sysbp_diasbp_ratio < 0, NA, sysbp_diasbp_ratio)  # Remove extreme outliers
+  )
+
+# Prepare data for plotting
+ratios_filtered <- ratio_data %>%
+  select(sysbp_diasbp_ratio, bun_creatinine_ratio) %>%
+  pivot_longer(cols = everything(), names_to = "Ratio", values_to = "Value") %>%
+  filter(!is.na(Value))  # Drop NA values
+
+# Plot updated distribution of ratios
+ggplot(ratios_filtered, aes(x = Value, fill = Ratio)) +
+  geom_density(alpha = 0.7) +
+  facet_wrap(~ Ratio, scales = "free", nrow = 2) +  # Adjust layout for better readability
+  labs(
+    title = "Distribution of Clinically Relevant Ratios (Filtered)",
+    x = "Ratio Value",
+    y = "Density",
+    fill = "Ratio"
+  ) +
+  scale_fill_manual(values = c("sysbp_diasbp_ratio" = "lightblue", "bun_creatinine_ratio" = "tomato")) +  # Custom colors
+  theme_minimal() +
+  theme(
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9),
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels for clarity
+  )
+
+```
+
+
+```{r Step 4.3 Cumulative, echo=FALSE}
+# Add cumulative measures
+cumulative_data <- master_data %>%
+  filter(!is.na(urineoutput), !is.na(expire_flag.x)) %>%  # Remove rows with missing values
+  mutate(
+    total_urine_output = urineoutput  # Assume urineoutput is cumulative over 24 hours
+  )
+
+# Plot total urine output by mortality status
+ggplot(cumulative_data, aes(x = as.factor(expire_flag.x), y = total_urine_output, color = as.factor(expire_flag.x))) +
+  geom_jitter(alpha = 0.4, width = 0.15) +  # Scatter points with reduced jitter
+  geom_boxplot(alpha = 0.2, color = "black", outlier.shape = NA) +  # Add boxplot overlay
+  labs(
+    title = "Scatter Plot of Total Urine Output by Mortality Status",
+    x = "Survival Status",
+    y = "Total Urine Output (mL)",
+    color = "Survival Status"
+  ) +
+  scale_color_manual(
+    values = c("0" = "lightblue", "1" = "tomato"),
+    labels = c("Survived", "Died")
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9),
+    axis.text.x = element_text(angle = 45, hjust = 1)  # Rotate x-axis labels for clarity
+  )
+```
+
+---
+
+## Section 5: Save All Processed Datasets to CSV Format
+```{r Section 5, echo=FALSE}
+# # Save time_series_first24
+# write.csv(time_series_first24, file = file.path(output_path, "time_series_first24.csv"), row.names = FALSE)
+# 
+# # Save filtered_data2
+# write.csv(filtered_data2, file = file.path(output_path, "filtered_data2.csv"), row.names = FALSE)
+# 
+# # Save master_data
+# write.csv(master_data, file = file.path(output_path, "master_data.csv"), row.names = FALSE)
+# 
+# # Confirmation message
+# cat("Datasets (time_series_first24, filtered_data2, master_data) have been saved to:", output_path, "\n")
+# 
+
+```
+

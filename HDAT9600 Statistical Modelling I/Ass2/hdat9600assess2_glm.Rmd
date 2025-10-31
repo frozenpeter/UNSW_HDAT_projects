@@ -1,0 +1,794 @@
+---
+title: "HDAT9600 Generalised Linear Models Assignment"
+subtitle: "02/04/2024"
+author: "Zhenyu Zhang"
+date: '`r format(Sys.Date(), "%d %B, %Y")`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# leave this code here, but feel free to adjust the options or add some more
+# see the knitr documentation for details
+knitr::opts_chunk$set(echo = TRUE, fig.width=12, fig.height=12)
+```
+
+
+## Instructions
+
+This file is the R Markdown document in which you need to complete your HDAT9600 Generalised Linear Model assignment. This assignment is assessed and will count for 25% of the total course marks.
+
+You should now complete the tasks described below, in the spaces provided. Don't hesitate to ask the course convenor for help (use the OpenLearning environment to do that) --- but remember that these are **individual** assignments and thus what you submit should be your own work, and you need to both understand and be able to explain what you did in your solutions. The course convenor is happy to point you in the right direction and to make suggestions, but won't, of course, complete your assignment for you!
+
+Each task below attracts the indicated number of marks (out of a total of 25 marks for the assignment). A marking rubric is also provided separately to give you an idea of what you should be aiming for across 4 areas: EDA; Modelling; Interpretation; Presentation. 
+
+
+## Task 1 Logistic Regression predictive model 
+
+### (10 marks: Modelling (4); Interpretation(3); Presentation(3))
+
+The data set labour.csv is from a 1977 survey of Canadian couples and families. The variables are `work`, whether the female of the household undertook any paid employment either full time or part time (1=did not take paid employment, 0=took paid employment), `hincome`, income of the male member of the household (in $1000’s), `children`, a factor variable deﬁning whether children were present in the household and `region`, a factor with levels: Atlantic, (Atlantic Canada); BC, (British Columbia); Ontario; Prairie, (Prairie provinces); Quebec.
+
+The objective is to *predict* female participation in the labour force using the `work` variable as the outcome.
+
+Build a suitable model (including, if appropriate, two-way interactions). Produce the Receiver Operating Curve (RoC) and Area Under the Curve (AUC) for any model you propose. Interpret and comment on how useful this model is for predicting the outcome `work`. 
+
+*Note: You may find it useful to undertake EDA before fitting your model but please note you will NOT be marked on the EDA for Task 1 and should suppress the EDA output from appearing in the knitted html document (eg. using 'include=FALSE' in the options for the EDA related code blocks). Add additional code and text blocks if you wish.* 
+
+```{r task1-setup}
+# load the labour dataset and make it available for code in 
+# subsequent code chunks.
+mydat <- file.path("C:/Users/froze/OneDrive/Documents/2.1 UNSW bioinfo/HDAT9600/Assignment/Ass2")
+labour <- read.csv(file.path(mydat, "labour.csv"))
+
+```
+
+```{r task1.0}
+# insert your R code (with comment lines if you wish) here
+
+#install.packages("PerformanceAnalytics")
+#install.packages("tidyverse")
+#install.packages("gridExtra")
+#install.packages("MASS")
+#install.packages("ROCR")
+#install.packages("DescTools")
+#install.packages("brglm")
+#install.packages("elrm")
+#install.packages("htmltools")
+
+library(PerformanceAnalytics)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(Matrix)
+library(car)
+library(MASS)
+library(ROCR)
+library(DescTools)
+library(brglm)
+library(elrm)
+#chart.Correlation(labour, histogram=TRUE,pch=19)
+```
+ 
+```{r task1.1}
+# The mutate function to transfer/format the categorical variables like children and region as factors.
+labour = labour %>%
+  mutate(children = as.factor(labour$children),
+         region = as.factor(labour$region),
+         work_factor = factor(work, levels = c(0, 1), labels = c("Took paid employment", "Did not take paid employment"))
+        )
+
+```
+
+
+```{r task1.2}
+# Making predictions via shown data in polts
+# Plot 1: Relation between children and work
+plot1 <- labour %>%
+  count(children, work_factor) %>%
+  ggplot(aes(x = children, y = n, fill = work_factor)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_minimal() +
+  labs(fill = "Employment Status",
+       y = "Proportion",
+       x = "Children Present",
+       title = "Relation between Children and Work")
+
+# Plot 2: Relation between region and work
+plot2 <- labour %>%
+  count(region, work_factor) %>%
+  ggplot(aes(x = region, y = n, fill = work_factor)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_minimal() +
+  labs(fill = "Employment Status",
+       y = "Proportion",
+       x = "Region",
+       title = "Relation between Region and Work")
+
+# Plot 3: Relation between hincome and work
+plot3 <- labour %>%
+  ggplot(aes(x = work_factor, y = hincome, fill = work_factor)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(fill = "Employment Status",
+       y = "Income of the male member of the household (in $1000’s)",
+       x = "Employment Status",
+       title = "Relationship between Male Household Member's Income and Female Employment Status")
+
+# Arrange the plots in a grid
+grid.arrange(plot1, plot2, plot3, ncol = 2, widths = c(2, 1.8))
+```
+
+```{r task1.3}
+labour %>%
+  ggplot(aes(x = hincome, fill = as.factor(work_factor))) +
+  geom_density(alpha = 0.7) +
+  theme_test() +
+  labs(fill = "Employment Status", y = "Density", x = "Income of the male member of the household (in $1000’s)",
+       title = "Relationship between Distribution of Male Household Members' Income and Female Employment Status")
+
+```
+1. **Relation between Children and Femal Work**:
+   - The first plot shows the proportion of women who took paid employment versus those who did not, categorized by the presence of children in the household.
+   - It appears that a higher proportion of women with no children present are engaged in paid employment compared to those with children. This suggesting that child-rearing responsibilities may influence a woman's decision or ability to work.
+   
+2. **Relation between Region and Femal Work**:
+   - The second plot displays the proportion of women working or not working across different regions.
+   - The employment status of women seems to vary by region, with some regions like BC and Quebec showing a higher proportion of females not engaged in paid employment compared to regions like Ontario and the Prairie provinces.
+   - This suggests that regional factors, potentially including region (economic conditions or cultural norms), might play a role in female labor force participation. However,it may not be a strong predictor.
+
+3. **Relation between Male Household Income and Femal Work** (Box Plot and Density Plot):
+   - In the box plot, the median income of households where women did not take paid employment appears to be slightly higher than in those where women did. This could suggest that higher male income might support the household sufficiently, reducing the necessity for women to seek employment.
+   - The density plot shows a more pronounced right skew for households with no female employment, indicating that when men earn significantly more, women might be less likely to engage in paid work.
+   - Furthermore, the longer right tail suggests that while in many high male income households , there are still a significant number of working women.
+   
+4. **Model Choice**:
+   - Logistic regression is suitable because the outcome variable (`work`) is binary.
+   - The model should initially include `hincome`, `children`, and `region` as predictors, given that these are key variables shown in the plots.
+   - Given the potential for different income effects depending on the presence of children and in different regions, interaction terms like `hincome:children` and `hincome:region` may be informative.
+   - The initial plots do not strongly suggest interactions between `children` and `region`, but such terms could be tested in the model for completeness.
+
+5. **Model Effectiveness**:
+    - The model's effectiveness can be judged by the AUC of an ROC curve. Given the apparent relationships in your plots, a model that includes these predictors could reasonably be expected to perform better than chance. An AUC significantly above 0.5 would support this.
+    - It's important that the strength of these relationships will need to be rigorously tested in the context of the logistic regression model, and the significance and confidence intervals of the model coefficients will provide more insight into the relationships indicated by these plots.
+   
+   
+```{r task1.4}
+library(glmnet)
+
+model <- glm(work ~ hincome + children + region + hincome:children + hincome:region + children:region,
+             family = binomial(), data = labour)
+
+summary(model)
+```
+1. **(Intercept)**: The negative estimate suggests that when all other variables are zero, the log-odds of a woman not engaging in paid employment is lower. However, this coefficient is not statistically significant at the 5% level (p-value = 0.0716, denoted by `.` which indicates a p-value < 0.1).
+  a. **hincome**: The positive coefficient for `hincome` indicates that as the income of the male member of the household increases, the likelihood of the female not engaging in paid employment increases. This effect is marginally significant (p-value = 0.0796), suggesting it could be an important factor although it doesn't reach the conventional 5% significance level.
+  b. **childrenpresent**: This has a significant positive coefficient (p-value = 0.0348, indicated by `*`), meaning that the presence of children in the household is associated with a higher likelihood of females not engaging in paid employment.
+  c. **region**: The coefficients for the regions suggest some variation in the likelihood of women not engaging in paid employment based on geographic location, but none of these are statistically significant at the 5% level.
+ 
+2. **Interactions**: The interaction terms show how the effect of income on employment status changes with the presence of children and across different regions.
+  a. The interaction between `hincome` and `childrenpresent` is negative, which could suggest that the effect of higher male income on the likelihood of females not working is lessened when children are present, although this is not statistically significant (p-value = 0.1446).
+  b. Other interaction terms do not appear to be significant or not be contributing to the model, with high p-values and very large standard errors.
+    - A simpler model without all interaction terms would be appropriate.
+    - The large standard errors, particularly for `regionPrairie`, indicate instability in the estimates for these coefficients, which can occur when a category has few observations.
+
+3. **Other Information**
+  a. dispersion parameter: In logistic regression, the dispersion parameter is typically set to 1. In some types of models (like Poisson regression), the dispersion parameter can differ from 1, which indicates overdispersion or underdispersion.
+  b. Null deviance: This represents the difference between a model with only the intercept (which predicts the outcome using the mean) and the saturated model (a theoretical model with a perfect fit). 
+    The 'on 262 degrees of freedom' part indicates that there are 262 degrees of freedom associated with the null model. This number comes from the number of observations minus the number of estimated parameters; in the null model, the only parameter is the intercept.
+  c. Residual deviance: On 247 degrees of freedom' refers to the number of observations minus the number of parameters estimated in the model. Here, it appears that 15 parameters were estimated (262 - 247 = 15).
+  d. AIC (Akaike Information Criterion): This is a metric used for model selection. It takes into account the goodness of fit (like deviance) but also includes a penalty for the number of parameters used in the model to discourage overfitting. A lower AIC value suggests a better model.
+  e.Fisher Scoring is an iterative algorithm used to estimate the parameters of the model. The number of iterations refers to how many cycles the algorithm went through before converging on a solution.
+
+```{r task1.5}
+tidy(model)
+```
+**Suitability of Two-Way Interactions**
+Two-way interactions should be considered if there's a theoretical justification or if preliminary data exploration suggests that the effect of one variable on the outcome depends on another variable.
+Given the large coefficients and standard errors for some interactions, particularly with variable 'region', this could indicate that these interactions are not meaningful or that there's insufficient data to estimate these effects accurately.
+
+proceed: 1.Simplify the Models   2.Use AIC and hypothesis testing the simplified models   3.Assess Two-Way Interactions
+
+```{r task1.6}
+# Basic model without interaction terms
+basic_model <- glm(work ~ hincome + children + region, family = binomial(), data = labour)
+
+summary(basic_model)
+```
+
+```{r task1.7}
+simple_model <- glm(work ~ hincome + children, family = binomial(), data = labour)
+
+summary(simple_model)
+```
+
+
+
+```{r task1.8}
+anova_basic_model <- anova(basic_model, model, test = "Chisq")
+
+print(anova_basic_model)
+AIC(basic_model, model)
+```
+
+
+```{r task1.9}
+anova_basic_simple <- anova(basic_model, simple_model, test = "Chisq")
+
+print(anova_basic_simple)
+AIC(basic_model, simple_model)
+
+```
+**basic_model**:
+  - Includes `hincome`, `children`, and `region`.
+  - It has an AIC of 331.30.
+  - The predictors `hincome` and `childrenpresent` are significant.
+
+**simple_model**:
+  - Includes only `hincome` and `children`.
+  - It has a lower AIC of 325.73, which indicates a better fit relative to the number of predictors used compared to `basic_model`.
+  
+**ANOVA Tests**:
+  - 'anova_basic_model' compares `basic_model` and `model` (full model with interactions):
+      * The p-value for the chi-squared test is 0.1102, which suggests that the interactions added in `model` do not significantly improve the fit of the model compared to `basic_model`.
+      * `model` has a slightly higher AIC than `basic_model` (334.95 vs. 331.30), which further suggests that the additional complexity may not be justified.
+  - 'anova_basic_simple' compares `basic_model` and `simple_model`:
+      * The p-value for the chi-squared test is 0.6569, indicating no significant loss of fit when dropping the `region` variable.
+      * The lower AIC of `simple_model` suggests it may be the preferred model over `basic_model`.
+
+**Conclusions**:
+  - The `simple_model` is the most parsimonious of the models and has the lowest AIC, `hincome` and the presence of children (`childrenpresent`) are significant predictors of whether the female of the household engages in paid employment.
+  - The lack of significance of the `region` variable in `basic_model` and the non-significant chi-squared test when comparing `basic_model` to `simple_model` indicate that including `region` may not be necessary.
+  - The full model with two-way interactions (`model`) does not show a significant improvement over `basic_model` when looking at the chi-squared test and has a higher AIC, suggesting that these interactions do not provide additional predictive power.
+
+```{r task1.10}
+# Full model with all two-way interactions and the three-way interaction between hincome, children, and region.
+# full_interaction_model <- glm(work ~ hincome * children * region, family = binomial(), data = labour)
+
+# Model with all two-way interactions (test all two-way interactions without the three-way interaction)
+two_way_interaction_model <- glm(work ~ (hincome + children + region)^2, family = binomial(), data = labour)
+
+# Summarize the model
+# summary(two_way_interaction_model)
+
+# Test dropping each interaction term from the full model at a time
+drop1(two_way_interaction_model, test = "Chisq")
+
+```
+**drop1**:
+  - The output from the `drop1` function indicates the change in deviance (and thus the fit of the model) if each of the interaction terms were removed.
+  - The p-value for the test when removing the interaction between `children` and `region` is 0.06225, which is the lowest among the interaction terms and indicates a marginal statistical significance (denoted by `.`). This suggests that these interactions might be providing some valuable information about the model fit.
+  - Remove the interaction terms do not significantly worsen the model's fit and it does decrease the model complexity. Moreover, the relatively high p-values suggest that the data do not provide strong evidence for the necessity of interaction terms.
+
+```{r task1.11}
+# Stepwise model selection using stepAIC from the MASS package
+# The resulting model will be the one with the lowest AIC reached by stepwise selection.
+step_model <- stepAIC(two_way_interaction_model, direction = "both", trace = FALSE)
+summary(step_model)
+```
+**stepAIC**:
+  - the output from `stepAIC` indicating the simplest model with only `hincome` and `children` as predictors suggests that this model has the lowest AIC among the models it considered.
+  - according to the stepwise algorithm which evaluates both the goodness of fit (via the likelihood) and the model complexity (number of predictors), your `simple_model` is the preferred one.
+
+```{r task1.12}
+# Basic Model Diagnostics for basic_model and simple_model to check how well they fit the data
+# Calculate deviance residuals and linear predictors for the basic_model
+labour <- labour %>%
+  mutate(
+    residuals_basic = residuals(basic_model, type = "deviance"),
+    linpred_basic = predict(basic_model)
+  )
+
+# Bin the data by linear predictor and summarize
+diag_df_basic <- labour %>%
+  group_by(cut_linpred_basic = cut(linpred_basic, breaks = unique(quantile(linpred_basic, (1:100)/101)))) %>%
+  summarise(
+    mean_binned_residuals_basic = mean(residuals_basic),
+    mean_binned_linpred_basic = mean(linpred_basic)
+  )
+
+# Plot the residuals for the basic_model
+ggplot(data = diag_df_basic, aes(x = mean_binned_linpred_basic, y = mean_binned_residuals_basic)) +
+  geom_point() +
+  labs(x = "Mean Binned Linear Predictor Fitted Values",
+       y = "Mean Binned Deviance Residuals") +
+  ggtitle("Basic Model Residuals")
+
+# Simple Model Diagnostics
+# Calculate deviance residuals and linear predictors for the simple_model
+labour <- labour %>%
+  mutate(
+    residuals_simple = residuals(simple_model, type = "deviance"),
+    linpred_simple = predict(simple_model)
+  )
+
+# Bin the data by linear predictor and summarize
+diag_df_simple <- labour %>%
+  group_by(cut_linpred_simple = cut(linpred_simple, breaks = unique(quantile(linpred_simple, (1:100)/101)))) %>%
+  summarise(
+    mean_binned_residuals_simple = mean(residuals_simple),
+    mean_binned_linpred_simple = mean(linpred_simple)
+  )
+
+# Plot the residuals for the simple_model
+ggplot(data = diag_df_simple, aes(x = mean_binned_linpred_simple, y = mean_binned_residuals_simple)) +
+  geom_point() +
+  labs(x = "Mean Binned Linear Predictor Fitted Values",
+       y = "Mean Binned Deviance Residuals") +
+  ggtitle("Simple Model Residuals")
+```
+**Logistic regression diagnostics (A form of residual analysis)**:
+  - The deviance residuals and linear predictors are added to dataset for both models (basic_model and simple_model)
+  - Groups them into bins, calculates the mean for each bin, and then plots the mean binned residuals against the mean binned linear predictor fitted values.
+  - Any patterns in the plots that might indicate that the model is not fitting certain areas of the data space well.
+  - A good-fitting model should show a random scatter of points around the horizontal axis (y = 0) with no obvious patterns.
+
+**From the plots**:
+  - Both models show a relatively random scatter of points, indicating no obvious violations of homoscedasticity (constant variance of residuals). 
+  - There are no clear patterns or trends, such as a funnel shape or a systematic structure, which suggests that the models’ assumptions are not being obviously violated.
+  - However, in both plots, there is some spread in residuals for larger fitted values, indicating potential non-constant variance in this range. This might be worth further investigation, such as examining whether this spread is due to specific observations and whether those observations are influential or outliers.
+  
+  
+```{r task1.13}
+# Influence plot for the basic_model
+influencePlot(basic_model, id.method = "identify", main = "Influence Plot for Basic Model")
+
+# Influence plot for the simple_model
+influencePlot(simple_model, id.method = "identify", main = "Influence Plot for Simple Model")
+
+```
+**Analysis of the Influence Plots**
+The influence plots for both the basic and simple models display standardized residuals on the y-axis against the leverage (hat values) on the x-axis, with the size of the circles corresponding to Cook's distance for each observation.
+
+1. Basic Model Influence Plot:
+    - Most data points have low leverage, which means they are not unduly influencing the model's parameter estimates.
+    - A few observations have higher leverage (such as observation 150), but their standardized residuals are not particularly large, meaning their influence on the model, while present, may not be of great concern.
+    - Observations 76 and 77 have high standardized residuals and moderate leverage, and their Cook's distance is relatively large (the size of the circles), indicating they are influential points and may be outliers or points of high influence.
+    
+2. Simple Model Influence Plot:
+    - Similar to the basic model, most points have low leverage. 
+    - Observations 76 and 77 are again identified as influential (with high Cook's distance), suggesting that these points are consistently influential across both models.
+    - Observations 89 and 90 also show up as points with moderate influence in the simple model.
+   
+3. Comparison:
+    - Both models have similar influential points, especially observations 76 and 77, which are consistent across both plots.
+    - The basic model appears to have a slightly more even distribution of influence among the observations, with fewer points having large Cook's distances compared to the simple model.
+    
+
+```{r task1.14}
+# Predicted probabilities for basic_model
+pred_basic <- predict(basic_model, type = "response")
+pred_simple <- predict(simple_model, type = "response")
+
+# Create prediction objects for ROC analysis
+pred_obj_basic <- prediction(pred_basic, labour$work)
+pred_obj_simple <- prediction(pred_simple, labour$work)
+
+# Create performance objects for ROC analysis
+perf_basic <- performance(pred_obj_basic, "tpr", "fpr")
+perf_simple <- performance(pred_obj_simple, "tpr", "fpr")
+
+# Plot ROC curves
+plot(perf_basic, col = "red", main = "ROC Curves for Basic and Simple Models")
+plot(perf_simple, col = "blue", add = TRUE)
+abline(a = 0, b = 1, lty = 2)
+
+# Add a legend
+legend("bottomright", legend = c("Basic Model", "Simple Model"), col = c("red", "blue"), lwd = 2)
+
+# Calculate AUC for basic_model
+auc_basic <- performance(pred_obj_basic, measure = "auc")
+auc_basic_value <- auc_basic@y.values[[1]]
+cat("AUC for Basic Model:", auc_basic_value, "\n")
+
+# Calculate AUC for simple_model
+auc_simple <- performance(pred_obj_simple, measure = "auc")
+auc_simple_value <- auc_simple@y.values[[1]]
+cat("AUC for Simple Model:", auc_simple_value, "\n")
+
+
+```
+**ROC curve**:
+- Both models perform better than random guessing (the diagonal line from [0,0] to [1,1]).
+- The Basic Model has a slightly higher Area Under the Curve (AUC) of 0.7130824 compared to the Simple Model AUC of 0.7054659, indicating the Basic Model has a marginally better ability to discriminate between two work classes.
+    *AUC Values range from 0.5 (no discrimination) to 1.0 (perfect discrimination). Both models have AUC values above 0.7, which is considered acceptable.
+- The difference in AUC is minimal, suggesting that the performance of the two models is quite similar.
+
+```{r task1.15}
+PseudoR2(basic_model, which = "all")
+PseudoR2(simple_model, which = "all")
+
+```
+**Pseudo-R2**:
+- McFadden’s R^2:
+This is a measure of model fit. It compares the likelihood of your model to the likelihood of a null model that includes only an intercept. For both models, these values are relatively low (around 0.10), which is common for pseudo-R^2 in logistic regression models.
+
+- Nagelkerke R^2:
+This is an adjusted version of Cox and Snell’s R^2 that can reach a maximum value of 1. It gives a more interpretable scale. The values for both models are below 0.20, which suggests a relatively modest amount of variability explained by each model.
+
+- AIC (Akaike Information Criterion):
+Lower AIC values suggest a better-fitting model. Here, the simple model has a lower AIC (325.73) compared to the basic model (331.30), indicating a better fit relative to the complexity.
+
+- BIC (Bayesian Information Criterion):
+Similar to AIC but includes a higher penalty for the number of parameters. The simple model has a lower BIC (336.45) than the basic model (356.31), which also suggests it is the better model when accounting for model complexity.
+
+- logLik and logLik0:
+These are the log-likelihoods of the model and the null model, respectively. The closer the logLik is to logLik0, the less additional explanatory power the model has over the null model.
+
+- G2 (Likelihood Ratio Statistic):
+This is twice the difference between the log-likelihood of the null model and the log-likelihood of the model. It can be used for a likelihood ratio test. Lower values suggest better model fit.
+
+All of the pseudo-R^2 values are quite low, which, as your course notes state, is not unusual for logistic regression models. The real value of these pseudo-R^2 statistics is in comparing models. In this case, both models have similar values, but the simple model has slightly lower (better) AIC and BIC values, suggesting it may be the better of the two models given the data.
+
+
+## Task 2: Binomial GLM explanatory model 
+
+
+In this task, you will be using the `esoph` dataset which comes with the core R installation. 
+
+The manual (help) page for the `esoph` dataset states the following:
+
+**Description**
+
+* Data from a case-control study of (o)esophageal cancer in Ille-et-Vilaine, France.
+* A data frame with records for 88 age/alcohol/tobacco combinations.
+
+**Columns**
+
+`agegp`
+:  Age group: 25--34 years, 35--44 years, 45--54 years, 55--64 years, 65--74 years, 75+ years
+
+`alcgp`
+:  Alcohol consumption:	0--39 gm/day, 40--79 gm/day, 80--119 gm/day, 120+  gm/day
+
+`tobgp`
+:  Tobacco consumption: 0-- 9 gm/day, 10--19 gm/day, 20--29 gm/day, 30+ gm/day
+
+`ncases`
+:  Number of cases	
+
+`ncontrols`
+:  Number of controls
+
+### 2A: Brief EDA 
+#### (4 marks: EDA(2); Interpretation(1); Presentation(1))
+
+Carry out a brief graphical exploratory data analysis looking at the frequency distribution of cases versus controls across population subgroups: 
+
+* Create a separate scatter or bar plot (choose which you think works better) for each of the three predictor variables (`agegrp`, `alcgroup` , `tobgp`). Use the levels of the predictor variable as categories on the x-axis. On the y axis plot the proportion of cases AND the proportion of controls. (This should result in three plots - ONE plot per predictor). 
+* For `alcgroup` and `tobgp`, layer/facet each of these plots by `agegrp` to form a grid of sub-plots which shows distribution of cases and controls by alcohol and tobacco consumption for each age group. If necessary, rotate or adjust the axis labels and/or use the fig.width and fig.height parameters for the R code blocks below to ensure that the resulting plot is neatly presented and all text is legible. (This should result in TWO grid plots or matrix plots - ONE for `alcgroup` and ONE for `tobgp`).
+
+* Write a brief commentary describing what these plots show (one or two sentences only).
+
+```{r task2a-1}
+# insert your R code (with comment lines if you wish) here
+data(esoph)
+
+#clean up the categories, remove the 'g/day' part from the 'alcgp' and 'tobgp' columns 
+esoph$alcgp <- as.factor(gsub("g/day", "", esoph$alcgp))
+esoph$tobgp <- as.factor(gsub("g/day", "", esoph$tobgp))
+```
+
+
+```{r task2a-2}
+# Calculate proportions within each age group
+esoph_age <- esoph %>%
+  group_by(agegp) %>%
+  summarise(cases_sum = sum(ncases),
+            controls_sum = sum(ncontrols)) %>%
+  mutate(prop_cases = cases_sum / (cases_sum + controls_sum),
+         prop_controls = controls_sum / (cases_sum + controls_sum))
+
+# Bar plot for age group
+ggplot(esoph_age, aes(x = agegp)) +
+  geom_bar(aes(y = prop_cases, fill = "Cases"), stat = "identity", position = position_dodge(width = 0.5), width = 0.4) +
+  geom_bar(aes(y = -prop_controls, fill = "Controls"), stat = "identity", position = position_dodge(width = 0.5), width = 0.4) +
+  scale_y_continuous(labels = abs, breaks = seq(-1, 1, 0.2)) +
+  scale_fill_manual(values = c("Cases" = "plum", "Controls" = "skyblue")) +
+  labs(title = "Proportion of Cases vs Controls by Age Group", y = "Proportion", x = "Age Group") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+```{r task2a-3}
+# Calculate proportions within each alcohol consumption group
+esoph_alc <- esoph %>%
+  group_by(alcgp) %>%
+  summarise(cases_sum = sum(ncases),
+            controls_sum = sum(ncontrols)) %>%
+  mutate(prop_cases = cases_sum / (cases_sum + controls_sum),
+         prop_controls = controls_sum / (cases_sum + controls_sum))
+
+# Assuming esoph_alc is already calculated as shown previously
+ggplot(esoph_alc, aes(x = alcgp)) +
+  geom_bar(aes(y = prop_cases, fill = "Cases"), stat = "identity", position = position_dodge(width = 0.5), width = 0.4) +
+  geom_bar(aes(y = -prop_controls, fill = "Controls"), stat = "identity", position = position_dodge(width = 0.5), width = 0.4) +
+  scale_y_continuous(labels = abs, breaks = seq(-1, 1, by = 0.1)) +
+  scale_fill_manual(values = c("Cases" = "moccasin", "Controls" = "skyblue")) +
+  labs(title = "Proportion of Cases vs Controls by Alcohol Consumption",
+       x = "Alcohol Consumption", y = "Proportion") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+
+
+```{r task2a-4}
+# Calculate proportions within each tobacco consumption group
+esoph_tob <- esoph %>%
+  group_by(tobgp) %>%
+  summarise(cases_sum = sum(ncases),
+            controls_sum = sum(ncontrols)) %>%
+  mutate(prop_cases = cases_sum / (cases_sum + controls_sum),
+         prop_controls = controls_sum / (cases_sum + controls_sum))
+
+# Assuming esoph_tob is already calculated as shown previously
+ggplot(esoph_tob, aes(x = tobgp)) +
+  geom_bar(aes(y = prop_cases, fill = "Cases"), stat = "identity", position = position_dodge(width = 0.5), width = 0.4) +
+  geom_bar(aes(y = -prop_controls, fill = "Controls"), stat = "identity", position = position_dodge(width = 0.5), width = 0.4) +
+  scale_y_continuous(labels = abs, breaks = seq(-1, 1, by = 0.1)) +
+  scale_fill_manual(values = c("Cases" = "salmon", "Controls" = "skyblue")) +
+  labs(title = "Proportion of Cases vs Controls by Tobacco Consumption",
+       x = "Tobacco Consumption", y = "Proportion") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+**Bar Plots for each of the three predictor variables**:
+The plots display the proportions of cases and controls across different age groups, and stratified by alcohol and tobacco consumption levels.
+  - The age group plot suggests that the proportion of cases generally increases with age, with the oldest age group showing the highest proportion of cases.
+  - In the alcohol consumption plot, a higher proportion of cases is observed in the highest alcohol consumption category, indicating a possible association between alcohol consumption and the occurrence of cases.
+  - The tobacco consumption plot shows a similar trend, with the highest tobacco consumption category also displaying a higher proportion of cases compared to controls.
+These visual trends suggest a potential relationship between increased age, higher alcohol consumption, and higher tobacco consumption with the prevalence of cases in the study population.
+
+
+```{r task2a-5}
+# Calculate proportions for alcgp
+esoph_alc <- esoph %>%
+  group_by(alcgp, agegp) %>%
+  summarise(cases_sum = sum(ncases),
+            controls_sum = sum(ncontrols)) %>%
+  mutate(prop_cases = cases_sum / (cases_sum + controls_sum),
+         prop_controls = controls_sum / (cases_sum + controls_sum)) %>%
+  ungroup()
+
+# Reorder the factor levels for 'alcgp'
+esoph$alcgp <- factor(esoph$alcgp, levels = c("0-39", "40-79", "80-119", "120+"))
+
+# Bar plot for alcohol consumption, faceted by age group
+ggplot(esoph_alc, aes(x = alcgp)) +
+  geom_bar(aes(y = prop_cases, fill = "Cases"), stat = "identity", position = position_dodge(width = 0.7), width = 0.6) +
+  geom_bar(aes(y = -prop_controls, fill = "Controls"), stat = "identity", position = position_dodge(width = 0.7), width = 0.6) +
+  facet_wrap(~ agegp) +
+  scale_y_continuous(labels = abs, breaks = seq(-1, 1, 0.2)) +
+  scale_fill_manual(values = c("Cases" = "moccasin", "Controls" = "skyblue")) +
+  labs(title = "Proportion of Cases vs Controls by Alcohol Consumption Across Age Groups",
+       y = "Proportion", x = "Alcohol Consumption") +
+  theme_minimal() +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+
+```{r task2a-6}
+# Calculate proportions for tobgp
+esoph_tob <- esoph %>%
+  group_by(tobgp, agegp) %>%
+  summarise(cases_sum = sum(ncases),
+            controls_sum = sum(ncontrols)) %>%
+  mutate(prop_cases = cases_sum / (cases_sum + controls_sum),
+         prop_controls = controls_sum / (cases_sum + controls_sum)) %>%
+  ungroup
+
+
+
+# Bar plot for tobacco consumption, faceted by age group
+ggplot(esoph_tob, aes(x = tobgp)) +
+  geom_bar(aes(y = prop_cases, fill = "Cases"), stat = "identity", position = position_dodge(width = 0.7), width = 0.6) +
+  geom_bar(aes(y = -prop_controls, fill = "Controls"), stat = "identity", position = position_dodge(width = 0.7), width = 0.6) +
+  facet_wrap(~ agegp) +
+  scale_y_continuous(labels = abs, breaks = seq(-1, 1, 0.2)) +
+  scale_fill_manual(values = c("Cases" = "salmon", "Controls" = "skyblue")) +
+  labs(title = "Proportion of Cases vs Controls by Tobacco Consumption Across Age Groups",
+       y = "Proportion", x = "Tobacco Consumption") +
+  theme_minimal() +
+  theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+**The Proportion of Cases vs Controls by Alcohol Consumption Across Age Groups plot**:
+  illustrates the distribution of esophageal cancer cases and controls across different age groups, segmented by levels of alcohol consumption. It shows that the proportion of cases increases with higher alcohol consumption, particularly noticeable in older age groups (after age 45).
+
+**The Proportion of Cases vs Controls by Tobacco Consumption Across Age Groups plot**:
+  displays the proportion of cases and controls stratified by tobacco consumption within each age group, revealing a trend where higher tobacco consumption is associated with a higher proportion of cases, which is especially pronounced in the 45-55 and 55-65 age groups.
+
+
+
+<br>
+
+### 2B: Binomial GLM with ordinal predictors 
+
+#### (2 marks: Modelling (1) Interpretation (1))
+
+Examine the `class()` and/or the `str()` of the `agegp`, `alcgp` and `tobgp` variables in the `esoph` dataset. Note that these three variables are 'ordinal factors'. 
+Fit a binomial GLM with `agegp`, `alcgp` and `tobgp` as the predictors (you can include the cancer cases outcome by using a matrix of cases and controls eg. cbind(ncases,ncontrols)). Display the model object using `summary()`. Describe what you notice about the output. Do some research to discover why the model has been fitted by R in that way, and write a brief (one or two sentence) explanation.
+ 
+```{r task2b}
+# Check the structure of the variables
+class(esoph$agegp)
+class(esoph$alcgp)
+class(esoph$tobgp)
+
+str(esoph$agegp)
+str(esoph$alcgp)
+str(esoph$tobgp)
+```
+
+```{r task2b-1}
+# Convert 'alcgp' and 'tobgp' to ordered factors
+esoph$alcgp <- factor(esoph$alcgp, ordered = TRUE, levels = c("0-39", "40-79", "80-119", "120+"))
+esoph$tobgp <- factor(esoph$tobgp, ordered = TRUE, levels = c("0-9", "10-19", "20-29", "30+"))
+
+# Check the structure again to confirm the change
+str(esoph$alcgp)
+str(esoph$tobgp)
+```
+
+```{r task2b-2}
+# Fit a binomial GLM with all two-way interactions
+full_model_esoph <- glm(cbind(ncases, ncontrols) ~ (agegp + alcgp + tobgp)^2, family = binomial, data = esoph)
+
+# Perform stepwise model selection
+step_model_esoph <- stepAIC(full_model_esoph, direction = "both", trace = FALSE)
+
+# Display the summary of the selected model
+summary(step_model_esoph)
+```
+**explanation**:
+The `agegp.L`, `agegp.Q`, etc., are not directly associated with the original `agegp` values but are instead representations of the underlying trend that the levels of the `agegp` variable might follow. They come from polynomial contrast coding, which is a way to handle ordered factors in regression models.
+  - `agegp.L` (Linear): This contrasts the means of the groups, assuming a linear trend. It compares the lower levels of the factor to the higher levels, assuming equal spacing between levels.
+  - `agegp.Q` (Quadratic): This looks at the curvature in the relationship between the factor levels and the response. It essentially contrasts the means of the groups with a squared term.
+  - `agegp.C` (Cubic), `agegp^4`, `agegp^5`, etc.: These are higher-order polynomial contrasts that look at more complex patterns such as cubic, quartic (fourth order), quintic (fifth order), etc.
+
+
+**The GLM output shows**:
+- Significant linear and quadratic trends for age (`agegp.L` and `agegp.Q`) suggesting that the risk of esophageal cancer increases at a decreasing rate with age. 
+- Whereas the significant quadratic term for age (`agegp.Q`) suggests the increase in risk with age might not be always consistent across all age groups. 
+- A strong linear relationship with alcohol consumption (`alcgp.L`) implying that cancer cases consistent increase with alcohol consumption.
+- A linear relationship with tobacco consumption (`tobgp.L`) indicating that tobacco is also a significant predictor of cancer cases.
+
+
+For a more intuitive understanding, it might be more informative to refit the model without polynomial contrasts and look at the coefficients for each level of `agegp` compared to a reference level.
+
+```{r task2b-3}
+# Fit a binomial GLM without polynomial contrasts (using treatment contrasts)
+model_no_poly <- glm(cbind(ncases, ncontrols) ~ agegp + alcgp + tobgp,
+                     family = binomial, data = esoph,
+                     contrasts = list(agegp = "contr.treatment",
+                                      alcgp = "contr.treatment",
+                                      tobgp = "contr.treatment"))
+
+# Display the summary of the model
+summary(model_no_poly)
+
+```
+
+- All coefficients are positive, suggesting that higher categories within each predictor are associated with an increased risk of esophageal cancer compared to their respective reference levels.
+- For `agegp`, the risk appears to increase significantly with age. Starting from the `35-44` age group, each subsequent age group shows a statistically significant increase in the log-odds of cancer cases compared to the `25-34` age group, with the `65-74` and `75+` groups showing the largest increases.
+- For `alcgp`, there is also a significant positive association with alcohol consumption. The `40-79` group has a higher risk than the `0-39` group, with the risk continuing to increase in the `80-119` and `120+` groups. The `120+` group has the highest log-odds of cases, indicating a strong relationship between higher alcohol consumption and the occurrence of cancer cases.
+- In `tobgp`, the log-odds of cases increase with tobacco consumption, with the `30+` group having a notably higher risk compared to the `0-9` group.
+- The null deviance and residual deviance suggest that the model fits the data significantly better than a null model with only an intercept.
+- The low AIC indicates that the model is relatively good at explaining the variation in the data with the number of predictors included. 
+- The number of iterations taken to converge indicates that the algorithm had no trouble fitting the model.
+
+<br>
+
+### 2C: Binomial GLM with unordered factors as predictors 
+#### (4 marks: Modelling (3); Presentation (1))
+
+Convert the three predictor variables in task 2B above to factor variables that are _not ordered_ (HINT: factor( , ordered = FALSE)). Give the levels useful labels so that you know what they mean. Then re-fit your model including these three unordered factors as predictor variables. Briefly assess model fit and then calculate Odds Ratios and confidence intervals where needed. Your results should aim to be concise but comprehensive enough to address the questions outlined below in section 2D. 
+
+
+```{r task2c}
+# Converting variables to unordered factors with labels
+esoph$agegp_unord <- factor(esoph$agegp, ordered = FALSE)
+esoph$alcgp_unord <- factor(esoph$alcgp, ordered = FALSE)
+esoph$tobgp_unord <- factor(esoph$tobgp, ordered = FALSE)
+
+# Re-fitting the model with unordered factors
+model_unord <- glm(cbind(ncases, ncontrols) ~ agegp_unord + alcgp_unord + tobgp_unord, family = binomial, data = esoph)
+
+# Assessing model fit
+summary(model_unord)
+
+# Calculating Odds Ratios and confidence intervals
+exp(cbind(OR = coef(model_unord), confint(model_unord)))
+
+```
+
+**guess**
+The `model_unord` and `model_no_poly` have the same results/summary(), I guess despite different naming and explicit conversion to unordered factors, the models are essentially equivalent. I think it is is because both models are treating `agegp`, `alcgp`, and `tobgp` as unordered factors. Conversion of the factors to unordered (`ordered = FALSE`) doesn't change the way R is handling these factors in the GLM.
+
+1.  **Odds Ratios (ORs)**
+    - the exponentiated coefficients from the logistic regression model.
+    - An OR greater than 1 suggests a higher likelihood of being a case (having cancer) as compared to the reference category.
+    - An OR less than 1 indicates a lower likelihood compared to the reference.
+    - An OR of 1 means there's no difference in likelihood compared to the reference.
+   
+2.  **2.5%**: This is the lower boundary of the confidence interval. It means that we can be 95% confident that the true Odds Ratio is higher than this value.
+    **97.5%**: This is the upper boundary of the confidence interval. It indicates that we can be 95% confident that the true Odds Ratio is lower than this value.
+
+3.  **The 95% confidence interval**: It is calculated as the range between these two percentiles. It is a way of expressing uncertainty about estimated effects. If a 95% confidence interval for an Odds Ratio does not include 1, this suggests that the effect is statistically significant at the 5% level. 
+
+
+- For `agegp_unord35-44`, the OR of 7.25 indicates that individuals in the `35-44` age group are about 7 times more likely to be a case compared to the baseline age group (`25-34`). With a 95% confidence interval ranging from approximately 1.20 to 141.01. This wide interval reflects uncertainty in the precise effect size but suggests a statistically significant association, as the entire interval is above 1. 
+
+- For `alcgp_unord40-79`, `alcgp_unord80-119`: The ORs increase with higher alcohol consumption categories, indicating a strong positive association between alcohol consumption and the odds of having cancer.
+
+- For `tobgp_unord10-19`, `tobgp_unord20-29`, `tobgp_unord30+`: Similarly, an increasing trend is observed with tobacco consumption.
+
+<br>
+
+### 2D: Interpreting the Binomial GLM (3 marks)
+#### (3 marks: Interpretation (3))
+
+Based on your analysis, provide a clear succinct written response to the following analytical questions: <br>
+(i)    Can the model be simplified? Justify your response? <br>
+(ii)   What is the relationship between alcohol consumption and esophageal cancer after controlling for age and tobacco consumption? Include key results to support your conclusions. <br>
+(iii)  What is the relationship between tobacco consumption and esophageal cancer after controlling for age and alcohol consumption? Include key results to support your conclusions. <br>
+
+(i) **Simplification of the Model**: The current model includes each level of the three predictors, treating them as unordered factors. Simplifying the model could involve reducing the number of levels or combining some levels if they do not significantly differ in their effect on the outcome. However, the significance of the coefficients in the model suggests that each level provides unique information. Therefore, simplifying by removing levels might result in the loss of valuable information.
+
+
+(ii) **Relationship Between Alcohol Consumption and Esophageal Cancer**: The model shows a strong relationship between alcohol consumption and esophageal cancer. Each increase in the alcohol consumption category (`alcgp`) corresponds to a significant increase in the odds of having esophageal cancer, after controlling for age and tobacco consumption. Specifically, compared to the '0-39' group, the odds ratios for higher alcohol consumption groups (40-79, 80-119, 120+) are substantially greater than 1 (smallest OR > 3.67), and the 95% confidence intervals for these odds ratios do not include 1, reinforcing the significance of this finding.
+
+
+(iii) **Relationship Between Tobacco Consumption and Esophageal Cancer**: Similarly, the model indicates a positive association between tobacco consumption and the risk of esophageal cancer, after accounting for age and alcohol consumption. Higher levels of tobacco consumption are associated with increased odds of cancer. For instance, the `30+` tobacco consumption group shows a significantly higher odds ratio compared to the reference group (`0-9`), and its confidence interval does not include 1, highlighting the strength of this relationship. The trend observed across the tobacco consumption categories aligns with an increased risk of cancer with higher tobacco use.
+
+```{r task2d}
+# Create a linear model approximation using just the predictors
+linear_approx_model <- lm(ncases ~ agegp_unord + alcgp_unord + tobgp_unord, data = esoph)
+
+# Calculate VIF
+vif(linear_approx_model)
+```
+
+**Collinearity and Redundancy**: If predictors are highly correlated or redundant, the model can often be simplified without losing predictive power. Checking for collinearity in a logistic regression is a bit different than in linear regression. 
+  - One common method is to examine the Variance Inflation Factor (VIF), which measures how much the variance of an estimated regression coefficient increases if your predictors are correlated.
+  - VIF is traditionally used in the context of linear regression. In the context of logistic regression, its interpretation should be more cautious, but it can still provide useful infomation.
+  - A VIF value greater than 5 or 10 indicates high collinearity, suggesting that the model can be simplified by removing redundant variables.
+      GVIF: This is the Generalized Variance Inflation Factor.
+      Df: This represents the degrees of freedom for each factor.
+      GVIF^(1/(2*Df)): This is the adjusted GVIF value.
+  - In this case, the adjusted GVIF values are all very close to 1, it suggests that multicollinearity is not a concern for these variables in your model, each of these predictors is providing unique information to the model.
+
+<br>
+
+## Task 3 Limitations of logistic regression 
+#### (2 marks: Interpretation (2))
+
+Explain in your own words one issue you may encounter when using logistic regression to model a common outcome. A common outcome is, for example, one where you might expect about 40-50% of people will experience the outcome. 
+
+One key issue with using logistic regression to model a common outcome, where the event of interest occurs in approximately 40-50% of the population, is the potential for reduced discriminative ability or reduced discrimination between the outcome classes. Logistic regression is designed to model the probability of an event occurring, and it performs best when the outcome is relatively rare or uncommon. When the event is common, the model may struggle to differentiate effectively between those who will experience the outcome and those who will not. Moreover, when dealing with a common outcome, the logistic model might predict probabilities that are systematically too high or too low, which affects the model's calibration. Calibration refers to how well the predicted probabilities agree with the actual probabilities of the outcome. In cases of a common outcome, ensuring that the model is well-calibrated becomes crucial.
+
+In a logistic regression model, the odds ratio is used to measure the strength of association between predictors and the outcome. When an outcome is common, the odds ratio (a measure of effect size) can become less informative. This is because in such scenarios, both the outcome and non-outcome groups have substantial numbers, making the odds ratio closer to 1, irrespective of the presence or strength of an actual association. However, as the prevalence of the outcome increases (approaching or exceeding 50%), the odds ratio can start to overestimate the risk (or protective effect) of the predictors, especially in unbalanced designs. This phenomenon, known as "rare disease assumption violation", can lead to misleading conclusions about the strength of the associations in the data.
+
+Furthermore, logistic regression assumes linearity of log-odds with respect to the predictors. When dealing with a common outcome, this assumption can lead to overestimation or underestimation of the probability near the extremes (0% or 100%). The model might not capture the nuances in data where a slight change in a predictor could have a significant impact on the outcome probability.
+
+## Save, knit and submit
+
+**Reminder**: don't forget to save this file, to knit it to check that everything works, and then submit via the drop box in Openlearning.
+
+## Submit your assignment
+
+When you have finished, and are satisfied with your assignment solutions, and this file knits without errors and the output looks the way you want, then you should submit via the drop box in Openlearning.
+
+
+### Problems?
+
+If you encounter problems with any part of the process described above, please contact the course convenor via OpenLearning as soon as possible so that the issues can be resolved in good time, and well before the assignment is due.

@@ -1,0 +1,57 @@
+---
+title: "HDAT9800 Chapter 4 Optional Unmarked Exercise"
+author: "Don't forget to change the author name in the metadata at the top of the document"
+date: "(or the date)"
+output:
+  html_document:
+    css: stylesheet.css
+---
+
+```{r setup, include=FALSE}
+# set any global chunk options using knitr::opts_chunk$set(...)
+```
+
+1. Collaborative development of a project that aims to communicate an issue or results to an audience
+   has aspects of development which are not present when a single person is undertaking a project on their own.
+
+   a. Identify one such aspect
+
+      <div class="answer">
+      Put your answer to 1a here.
+      </div>
+   
+   b. Identify how it is different in the individual and collaborative cases
+      (you will need to state something about each case).
+   
+      <div class="answer">
+      Put your answer to 1b here.
+      </div>
+
+   c. Identify what can be used to mitigate any problems arising in the collaborative case
+      and how this helps improve the quality of the resulting communication.
+  
+      <div class="answer">
+      Put your answer to 1c here.
+      </div>
+
+2. Repeat steps (a) to (c) for a second different aspect to that identified in (1).
+
+   a. Identify one such aspect
+   
+      <div class="answer">
+      Put your answer to 2a here.
+      </div>
+   
+   b. Identify how it is different in the individual and collaborative cases
+      (you will need to state something about each case).
+   
+      <div class="answer">
+      Put your answer to 2b here.
+      </div>
+
+   c. Identify what can be used to mitigate any problems arising in the collaborative case
+      and how this helps improve the quality of the resulting communication.
+  
+      <div class="answer">
+      Put your answer to 2c here.
+      </div>

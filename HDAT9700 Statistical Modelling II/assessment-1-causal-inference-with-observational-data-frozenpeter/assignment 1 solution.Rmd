@@ -1,0 +1,371 @@
+---
+title: "HDAT9700: Assessment 1 - Chapters 1-2"
+subtitle: "Addressing causal questions with observational data"
+author: "Mark Hanly"
+date: "October 2024"
+output: github_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE) # global chunk options here
+
+# Load libraries here
+library(dplyr) # For data manipulation
+library(ggplot2) # For plotting
+library(ggdag) # For DAGs
+library(dagitty) # For DAGs
+library(MatchIt) # For matching
+library(cobalt) # To compare balance
+library(compareGroups) # for comparison table
+library(ggpubr) # to arrange multiple plots together
+library(sjPlot) # For model tables
+```
+
+
+## Section 1 
+
+### Question 1: Draw a Directed Acyclic Graph (DAG) 
+
+The DAG below represents my assumptions about the causal relationship between FNP Program participants and low birth weight (LBW, defined as birthweight <2,500g). The causal model implies that the FNP program affects birthweight directly (FNP &rarr; LBW) and indirectly through the mediating factors of antenatal care, maternal smoking during pregnancy and nutrition). 
+
+
+```{r, echo = FALSE, fig.height = 8, fig.width = 12, fig.align='center'}
+# I have used the tool at dagitty.net to draft my DAG and generate the code below
+# myDAG <- 'dag {
+# bb="-0.5,-0.5,0.5,0.5"
+# "Antenatal care" [pos="0.231,0.130"]
+# "Maternal Age" [pos="-0.385,-0.038"]
+# Ethnicity [pos="-0.352,-0.370"]
+# FNP [exposure,pos="-0.113,0.099"]
+# LBW [outcome,pos="0.424,0.045"]
+# Maltreatment [pos="-0.350,0.274"]
+# Nutrition [pos="0.385,0.356"]
+# SES [pos="-0.268,-0.163"]
+# Smoking [pos="0.333,0.244"]
+# Stress [pos="0.097,0.302"]
+# "Antenatal care" -> LBW
+# "Maternal Age" -> FNP
+# "Maternal Age" -> LBW
+# Ethnicity -> "Maternal Age"
+# Ethnicity -> LBW
+# Ethnicity -> SES
+# FNP -> "Antenatal care"
+# FNP -> LBW
+# FNP -> Nutrition
+# FNP -> Smoking
+# Maltreatment -> FNP
+# Maltreatment -> Stress
+# Nutrition -> LBW
+# SES -> FNP
+# SES -> LBW
+# Smoking -> LBW
+# Stress -> LBW
+# }'
+
+knitr::include_graphics("myDAG.png")
+
+```
+
+
+### Question 2: Highlight any non-causal or backdoor path(s) and potential variables that might be useful to close the path(s). 
+
+There are several backdoor paths represented in the DAG, including:
+
+* FNP &larr; SES &rarr; LBW
+* FNP &larr; Maternal age &rarr; LBW
+* FNP &larr;  Maltreatment &rarr; Stress &rarr; LBW
+* FNP &larr; SES &larr; Ethnicity &rarr; LBW
+* FNP &larr; Maternal age &larr; Ethnicity &rarr; LBW
+* Ethnicity &larr; Maternal age &larr; Maternal age &rarr; LBW
+
+These paths could be closed by controlling for maternal age, SES, Ethnicity and Maltreatment. Age and ethnicity are (usually) relatively easy to record. SES is more of a multifaceted construct that incorporates factors like income, education, social class, and location. Maltreatment is a difficult variable to record in many contexts. Maltreatment often goes unreported or undisclosed and strict governance protocols are necessary to join up statutory maltreatment reports with other person-level data. 
+
+### Question 3:  Describe the distribution of the propensity score for mothers who participated in the program and unexposed mothers. 
+
+The distribution of propensity scores for program participants and non-participants is provided in Supplementary Figure 2 from the paper and reproduced below.
+
+![From Cavallaro et al (2023)](cavallaro-app-fig2.png)
+We can see that estimated propensities are right-skewed for FNP participants and non-participants, although more so for the participants, who have a higher median propensity (0.39 versus 0.31). The propensities range from 0 to 1 for both groups, with overlap across this range, thus we can see that the assumption of positivity is met, at least with respect to the propensity score. 
+
+
+## Section 2
+
+```{r}
+# Load the data
+load('fnp-data.Rda')
+
+# Some data prep
+df <- df |> 
+  mutate(
+    # Factor version of FNP variable
+    fnp2 = factor(fnp, 
+                   levels = c(1, 0), 
+                   labels = c('Participant', 'non-Participant')),
+    # Low birth weight
+    lbw = ifelse(bweight <=2500, 1, 0),
+    lbw2 = factor(fnp, 
+                   levels = c(0, 1), 
+                   labels = c('No', 'Yes')),
+  )
+
+```
+  
+### Question 1: Undertake an exploratory analysis, using tables and/or figures to describe the distribution and key associations in the data.  
+
+```{r eda1, include=FALSE}
+
+dim(df)
+summary(df)
+
+```
+
+The dataset includes observations for 11,174 mother-child pairs, of whom 1,787 (16%) participated in the FNP program. Maternal age ranged from 16 to 25 years with an median of 20 years (IQR=18-23), and participating mothers were significantly younger compared to non-participants (mean = 18.1 years versus 20.9 years.) The population was 40% White, 14% South Asian, 11% Black and 34% other backgrounds. Participants were less likely to be White (29.3%) compared to non-Participants (44.3%). 
+
+```{r}
+
+compareGroups(fnp ~ mat_age + ethnicity + deprivation + bweight + lbw2 + devVuln, 
+              method = c(1, 3, 1, 1, 3, 3),
+              data = df) |> 
+  createTable(
+    show.all = TRUE,
+    )
+
+```
+
+
+The average deprivation score was 5.5 (SD=2.9), with significantly higher deprivation scores for participants (7.1) compared to non-participants (5.2). Birthweight was normally distributed (mean=3,165g, SD=305g) and on average was significantly lower among children of participating mothers (mean=3,029) compared to non-participating mothers (mean=3,191g). Overall, 20.9% children in the study population were developmentally vulnerable, with a slightly higher prevalence of vulnerability in the participant group (22.5%) compared to the non-participant group (20.6%). 
+
+```{r}
+
+fnpCols <- c('#5dd39e', '#513b56') # Set consistent color theme
+
+# Maternal age
+p1 <- df |> 
+        group_by(fnp2, mat_age) |> 
+        summarise(sum = n()) |> 
+          ggplot(aes(x=mat_age, y=sum, fill=fnp2)) +
+          geom_col(position = position_dodge2(preserve = c("single"))) +
+          scale_x_continuous('Maternal age (years)', breaks=c(16, 18, 20, 22, 24)) +
+        scale_y_continuous('Count')  + 
+        scale_fill_manual(NULL, values = fnpCols) +
+        theme(legend.position = 'bottom',
+              title = element_text(colour='#513b56', size = 8),
+              plot.title.position = 'plot') +
+        labs(title = 'A. Participants were younger')
+
+# Ethnicity
+ethFill <- c('#C9B6CD', '#AF92B5', '#8A6392', '#5C4261')
+ethCol <- c('#5C4261', '#5C4261', '#C9B6CD', '#C9B6CD')
+
+p2 <-  df |> 
+        group_by(fnp2, ethnicity) |> 
+        summarise(sum = n()) |> 
+        group_by(fnp2) |> 
+        mutate(pct = sum/sum(sum)) |> 
+          ggplot(aes(x=fnp2, y=pct, fill=ethnicity)) +
+          geom_col(position='stack') +
+          geom_text(aes(label = paste0(round(100*pct), '%'), color=ethnicity), 
+                    position= position_stack(vjust = 0.5)) +
+          scale_x_discrete("") +
+          scale_y_continuous('Percent', labels = scales::percent) +
+          scale_fill_manual(NULL, values = ethFill) +
+          scale_color_manual(NULL, values = ethCol, guide='none') +
+        theme(title = element_text(colour='#513b56', size = 8),
+              plot.title.position = 'plot') +
+        labs(title = 'B. Participants were more likely to be non-White')
+    
+# Deprivation
+p3 <- df |> 
+        group_by(fnp2, deprivation) |> 
+        summarise(sum = n()) |> 
+          ggplot(aes(x=deprivation, y=sum, fill=fnp2)) +
+          geom_col(position = position_dodge2(preserve = c("single"))) +
+          scale_x_continuous('Deprivation index') +
+          scale_y_continuous('Count')  + 
+          scale_fill_manual(NULL, values = fnpCols) +
+        theme(legend.position = 'bottom',
+              title = element_text(colour='#513b56', size = 8),
+              plot.title.position = 'plot') +
+        labs(title = 'C. Participants lived in disadvantaged areas')
+
+p4 <- df |> 
+        ggplot(aes(x=bweight, fill=fnp2, color=fnp2)) +
+        geom_density(alpha = 0.8, color = NA) +
+        scale_x_continuous('Birth weight (g)') +
+        scale_y_continuous('Density')  + 
+        scale_fill_manual(NULL, values = fnpCols) +
+        theme(legend.position = 'bottom',
+              title = element_text(colour='#513b56', size = 8),
+              plot.title.position = 'plot') +
+        labs(title = 'D. Participating children had lower birthweight')
+
+
+ggarrange(p1, p2, p3, p4)
+
+
+```
+
+
+### Question 2: Undertake matching to evaluate the effect of program participation on the risk of low birthweight. 
+
+In line with the Section 1, matching variables are those that potentially close backdoor paths between program participation and the outcome of low birth weight, i.e. maternal age, area deprivation and ethnicity. Developmental vulnerability measured at age five causally comes after both the exposure and the outcome, and as such we should not include it for matching.
+
+I will undertake four different matching approaches: 
+
+1. Exact matching
+1. Coarsened exact matching
+1. 1:1 Propensity score matching
+1. 2:1 Propensity score matching with a calipers
+
+#### Exact matching
+
+```{r, echo=TRUE}
+
+match1 <- matchit(fnp ~ mat_age + deprivation + ethnicity,
+                   method = 'exact',
+                   data=df)
+```
+
+Exact matching matches 1,769 program participants to 4,727 non-participants. A total of 18 participants are excluded.
+
+```{r}
+sum1 <- summary(match1)
+sum1$nn
+```
+
+
+#### Coarsened exact matching
+
+```{r, echo=TRUE}
+match2 <- matchit(fnp ~ mat_age + deprivation + ethnicity,
+                   method = 'cem',
+                   group = list(
+                     ethnicity = list(c('White'), c('South Asian', 'Black', 'Other'))
+                     ),
+                  cutpoints = (list(
+                    mat_age = c(16,18,20,22)
+                  )),
+                   data=df)
+
+```
+
+With some experimentation I found that coarsening maternal age to two-year bands was sufficient to retain all program participants in the analysis. There probably isn't a huge difference between a 18 year old and 19 year old participant (for example), so this seems like a reasonable trade off. Here, 1,787 participants are matched to 4,953 participants. 
+
+```{r}
+sum2 <- summary(match2)
+sum2$nn
+```
+
+
+#### Propensity score matching
+
+```{r, echo = TRUE}
+match3 <- matchit(fnp ~ mat_age + deprivation + ethnicity,
+                   method = 'nearest',
+                   distance = 'glm',
+                   ratio = 1,
+                   data=df)
+
+```
+Propensity score matching successfully matches the 1,787 participants with an equal number of non-participants, based on their estimated probability of participation. 
+
+```{r}
+sum3 <- summary(match3)
+sum3$nn
+```
+
+
+#### Propensity score matching (2:1 with caliper)
+
+```{r, echo=TRUE}
+match4 <- matchit(fnp ~ mat_age + deprivation + ethnicity,
+                   method = 'nearest',
+                   distance = 'glm',
+                   ratio = 2,
+                   caliper = 0.5,
+                   data=df)
+```
+Introducing the caliper here results in 23 treated individuals with no match, while the remaining 1,764 participants are matched at a 2 to 1 ratio with 2,911 non-participants. 
+
+```{r}
+sum4 <- summary(match4)
+sum4$nn
+```
+
+### Question 3: Summarise the balance in the dataset before and after matching using appropriate figues and/or tables. 
+
+The figure below compares the standardised mean difference for the three matching variables of maternal age, ethnicity and deprivation before and after each of the four matching approaches. 
+
+
+```{r}
+
+l1 <- love.plot(match1, colors = ethCol[3:2], 
+                title = "Exact matching") + scale_x_continuous(limits = c(-2, 1.2))
+
+
+l2 <- love.plot(match2, colors = ethCol[3:2], 
+                title = "CEM") + scale_x_continuous(limits = c(-2, 1.2))
+
+l3 <- love.plot(match3, colors = ethCol[3:2], 
+                title = "1:1 PSM") + scale_x_continuous(limits = c(-2, 1.2))
+
+l4 <- love.plot(match4, colors = ethCol[3:2], 
+                title = "2:1 PSM") + scale_x_continuous(limits = c(-2, 1.2))
+
+ggarrange(l1, l2, l3, l4, legend = "top", common.legend = TRUE)
+
+```
+
+It is clear that for all approaches, balance is improved in the matched data. Exact matching achieves total balance in all variables, while coarsened exact matching achieves close to exact balance without dropping any participants. Some minor imbalance remains following both propensity matching approaches. 
+
+### Question 4: Use an appropriate linear model to estimate the effect of program participation in (i) the raw data and (ii) the matched data. 
+
+Based on the observations above, I will complete this question using the results from the coarsened exact matching approach. I will fit three models with low birth weight as the outcome and FNP participation as the exposure. 
+
+1. A model using the raw data
+1. A model using the balanced dataset following coarsened exact matching
+1. A model using the balanced dataset following coarsened exact matching that additionally controls for maternal characteristics of age, ethnicity, and area-level deprivation. The outcome is binary so I will use logistic regression. The results are presented below. 
+
+```{r}
+
+md2 <- match.data(match2)
+
+mod1 <- glm(lbw ~ fnp, 
+             family=binomial(link='logit'), 
+             data = df)
+
+mod2 <- glm(lbw ~ fnp, 
+             family=binomial(link='logit'), 
+             weights=weights,
+             data = md2)
+
+mod3 <- glm(lbw ~ fnp + mat_age + deprivation + ethnicity, 
+             family=binomial(link='logit'), 
+             weights=weights,
+             data = md2)
+
+tab_model(mod1, mod2, mod3,
+          keep = 'fnp',
+          show.r2 = F,
+          show.p = F,
+          pred.labels = c('FNP participation'),
+          dv.labels = c('1. Original data', 
+                        '2. CEM', 
+                         '3. CEM + controls'))
+
+```
+
+Based on the raw data, the odds of being born low birthweight was 2.7 times higher (95% CI 1.9 - 3.7) among FNP program participants to non-participants. The direction of effect switches in the matched analysis, which gives an estimated odds ratio of 0.65 (0.47-0.87) and reducing to 0.62 (0.45-0.83) when control variables are included in the analysis model. This suggests that FNP program participation reduced the odds of low birthweight by about 35%.
+
+The difference in the estimated effect of program participation on low birth weight suggests that the higher odds in Model 1 is an artifact of the confounding leading to a different profile of background characteristics among the program participants and non-participants. The apparent negative effeect of the program on the risk of being born low birth weight disappears once these background characteristics are appropriately balanced.
+
+### Question 5: What are the implications for the positivity and consistency assumptions in this example? 
+
+Positivity assumes that every levels of treatment has a positive probability of occurring across every level of the confounding variables. This assumption is not met in the whole sample with respect to the variable of maternal age: FNP program participants were restricted to ages 16-21. In the matching analysis, women aged 22 and over are excluded from the analysis, and the estimates of program effectiveness can not be applied to this group. 
+
+Consistency assumes that there is a single well-defined version of the treatment. We can't assess this from the data, but in practice there is often variation in how real-world programs are delivered. Of interest, in the Cavallaro paper, the authors state that 
+
+> Historically, FNP has been delivered in a similar way in England as the NFP is delivered in the USA (although more flexibility has been introduced in recent years). The licensing agreement stipulated that sites should follow a number of core model elements, so that the FNP could be replicated consistently, in order for the conditions upon which the previous evidence from the USA were based to be replicated. However, there are notable differences in eligibility criteria.
+
+Clearly there is a concerted effort here to ensure some degree of consistency. Variations to the "core model elements" could impact on the consistency assumption and make it difficult to pinpoint what aspects of the program contributed to positive outcome.

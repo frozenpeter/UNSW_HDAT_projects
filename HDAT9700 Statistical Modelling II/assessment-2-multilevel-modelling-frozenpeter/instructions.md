@@ -1,0 +1,111 @@
+HDAT9700: Assessment 2 - Chapters 3-5
+================
+Mark Hanly
+
+### Submission instructions
+
+This is an R Markdown document, an example of *literate programming*
+which allows users to interweave text, images, statistical code, and
+analysis output from a single file.
+
+To complete your assignment:
+
+- Edit the file `submission.Rmd`, interweaving text and R code as
+  appropriate to answer the questions below. Remember to `Knit` the file
+  to make sure everything is running smoothly. Detailed information on R
+  Markdown is available
+  [here](https://rmarkdown.rstudio.com/lesson-1.html), and there is a
+  useful cheat sheet
+  [here](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf).
+
+- Use Git to `commit` changes you make in this repo locally.
+
+- `Push` the repo, together with the edited `submission.Rmd` file, the
+  corresponding `submission.md` file and any other relevant files to
+  GitHub.
+
+- Note that the output format is specified as `github_document` in the
+  chunk above and in `submission.Rmd`. The advantage of this is that
+  your submitted assessment can be viewed directly in GitHub. However,
+  if you are using an R package that produces HTML output, you can
+  change the output format to `html_document`.
+
+- Note that the submission document includes further instructions re a
+  Student Declaration and statement on the use of Generative AI, which
+  you should complete.
+
+- You can `commit` and `push` as often as necessary—your assessment will
+  be graded on the most recent version of your repo at the assessment
+  due date.
+
+Good luck!
+
+------------------------------------------------------------------------
+
+## Section 1 (25%).
+
+### Overview
+
+This section is based on the following manuscript which you can access
+online at
+<https://www.frontiersin.org/articles/10.3389/fpubh.2023.1059878/pdf>
+
+> Liu, Meicen, et al. “Patient healthcare experiences of cancer
+> hospitals in China: a multilevel modeling analysis based on a national
+> survey.” Frontiers in Public Health 11 (2023): 1059878.
+
+This study used cross-sectional survey data from 30 tertiary cancer
+hospitals in China to examine patient satisfaction levels and
+between-hospital variation.
+
+### Question 1. (5 marks)
+
+What is the hierarchical data structure for this analysis?
+
+### Question 2. (20 marks)
+
+With reference to appropriate Figure(s) or Table(s), discuss whether the
+national-level hospitals are performing better or worse compared to
+provincial-level hospitals for the five satisfaction measures, having
+accounted for case-mix.
+
+## Section 2 (75%)
+
+### Overview
+
+You are provided with the dataset `hospSatisfaction.Rda` which contains
+fictitious data on patient satisfactions scores. Each row in this
+dataset represents one patient. Your aim is to develop a multilevel
+model of patient satisfaction based on the available patient-level and
+hospital-level variables.
+
+The dataset includes information on the following 8 variables:
+
+- **id** Unique hospital indicator
+- **status** Hospital type (public/private)
+- **area** Remoteness of hospital area (Remote/Regional/Urban)
+- **sex** Patient sex (Male/Female)
+- **age** Patient age (years)
+- **los** Patient length of stay (days)
+- **readmission** Had the patient been admitted to the same hospital in
+  the past 12 months (yes/no)
+- **satisfaction** Patient satisfaction score
+
+### Question 1. (20 marks)
+
+Undertake an exploratory data analysis of the available data
+
+### Question 2. (20 marks)
+
+Fit a series of multilevel models and select the best-fitting model for
+the data
+
+### Question 3. (15 marks)
+
+For your chosen model, check the model validity and communicate the
+model results using appropriate visualisations
+
+### Question 4. (20 marks)
+
+For your chosen model, provide a written interpretation of all of the
+model parameters

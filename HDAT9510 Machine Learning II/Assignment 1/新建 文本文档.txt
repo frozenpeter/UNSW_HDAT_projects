@@ -1,0 +1,385 @@
+import tensorflow as tf
+import random
+
+# Prepare Data for Multi-Class Classification
+# Separate paths for normal, bacterial and viral pneumonia paths
+normal_image_paths = [path for path in image_paths if 'normal' in path.lower()]
+bacterial_image_paths = [path for path in pneumonia_image_paths if 'bacteria' in path.lower()]
+viral_image_paths = [path for path in pneumonia_image_paths if 'virus' in path.lower()]
+
+print(f"Total NORMAL images: {len(normal_image_paths)}")
+print(f"Total bacterial pneumonia images: {len(bacterial_image_paths)}")
+print(f"Total viral pneumonia images: {len(viral_image_paths)}")
+
+Total NORMAL images: 1583
+Total bacterial pneumonia images: 2780
+Total viral pneumonia images: 1493
+
+# Sample 40% of each
+sample_size_normal = int(0.4 * len(normal_image_paths))
+sample_size_bacterial = int(0.4 * len(bacterial_image_paths))
+sample_size_viral = int(0.4 * len(viral_image_paths))
+
+sampled_normal_image_paths = random.sample(normal_image_paths, sample_size_normal)
+sampled_bacterial_image_paths = random.sample(bacterial_image_paths, sample_size_bacterial)
+sampled_viral_image_paths = random.sample(viral_image_paths, sample_size_viral)
+
+# Combine `NORMAL`, `bacterial pneumonia`, and `viral pneumonia` sampled images
+multi_class_image_paths = sampled_normal_image_paths + sampled_bacterial_image_paths + sampled_viral_image_paths
+print(f"Total multi-class sampled images: {len(multi_class_image_paths)}")
+
+Total multi-class sampled images: 2342
+
+# Assign labels to the images
+# 0: NORMAL, 1: BACTERIAL PNEUMONIA, 2: VIRAL PNEUMONIA
+normal_labels = [0] * len(sampled_normal_image_paths)
+bacterial_labels = [1] * len(sampled_bacterial_image_paths)
+viral_labels = [2] * len(sampled_viral_image_paths)
+
+# Combine image paths and labels
+multi_class_labels = normal_labels + bacterial_labels + viral_labels
+
+# Define a preprocessing and augmentation function to resize and normalize the images
+def preprocess_and_augment_image2(image_path):
+
+    # Load and decode the image
+    image = tf.io.read_file(image_path)
+    image = tf.image.decode_jpeg(image, channels=1)  # Convert to grayscale
+
+    # Resize the image
+    image = tf.image.resize(image, [64, 64])  # Resize to 64x64 pixels
+
+    # Data augmentation
+    image = tf.image.random_flip_left_right(image)  # Randomly flip horizontally
+    image = tf.image.random_brightness(image, max_delta=0.1)  # Randomly adjust brightness
+    image = tf.image.random_contrast(image, lower=0.8, upper=1.2)  # Randomly adjust contrast
+
+    # Normalize the image
+    image = tf.cast(image, tf.float32) / 255.0  # Normalize to [0, 1]
+
+    return image
+
+# Shuffle the data
+combined = list(zip(multi_class_image_paths, multi_class_labels))
+random.shuffle(combined)
+multi_class_image_paths, multi_class_labels = zip(*combined)
+
+# Create a TensorFlow dataset from image paths and labels
+multi_class_dataset = tf.data.Dataset.from_tensor_slices((list(multi_class_image_paths), list(multi_class_labels)))
+
+print(f"Size of initial multi_class_dataset: {len(list(multi_class_dataset))}")
+
+Size of initial multi_class_dataset: 2342
+
+Image path: b'/content/drive/MyDrive/Colab Notebooks/HDAT9510/Assignment1/chest_xray/train/PNEUMONIA/person1012_bacteria_2943.jpeg', Label: 1
+Image path: b'/content/drive/MyDrive/Colab Notebooks/HDAT9510/Assignment1/chest_xray/train/PNEUMONIA/person1403_virus_2406.jpeg', Label: 2
+
+# Define a function to preprocess images and their labels with augmentation
+def preprocess_image_label(image_path, label):
+
+    image = preprocess_and_augment_image2(image_path)   # Preprocess and augment the image
+    classification_target = tf.one_hot(label, depth=3)  # One-hot encode the classification label
+
+    return image, (image, classification_target)        # # The image is used as both input and reconstruction target
+
+# Map the preprocessing function to the dataset
+multi_class_dataset_mapped = multi_class_dataset.map(preprocess_image_label)
+
+# Print out after mapping
+for image, (reconstruction_target, classification_target) in multi_class_dataset_mapped.take(2):
+    print(f"Image shape: {image.shape}")
+    print(f"Reconstruction target shape: {reconstruction_target.shape}")
+    print(f"Classification target shape: {classification_target.shape}")
+
+Image shape: (64, 64, 1)
+Reconstruction target shape: (64, 64, 1)
+Classification target shape: (3,)
+Image shape: (64, 64, 1)
+Reconstruction target shape: (64, 64, 1)
+Classification target shape: (3,)
+
+def filter_images_by_shape(image, labels):
+    # Ensure the image has the shape [64, 64, 1]
+    return tf.reduce_all(tf.equal(tf.shape(image), tf.constant([64, 64, 1])))
+
+# Apply the filter to ensure consistent image shapes
+multi_class_dataset_filtered = multi_class_dataset_mapped.filter(lambda image, labels: filter_images_by_shape(image, labels))
+
+
+# Split the Dataset into training and validation sets
+dataset_size = len(multi_class_image_paths)
+train_size = int(0.8 * dataset_size)  # 80% for training
+val_size = dataset_size - train_size  # 20% for validation
+
+# Print the sizes to check
+print(f"Dataset size: {dataset_size}")
+print(f"Training set size: {train_size}")
+print(f"Validation set size: {val_size}")
+
+Dataset size: 2342
+Training set size: 1873
+Validation set size: 469
+
+
+# Shuffle and split the dataset
+train_dataset = multi_class_dataset_filtered.take(train_size)
+val_dataset = multi_class_dataset_filtered.skip(train_size)
+
+print(f"Total multi-class sampled images: {len(multi_class_image_paths)}")
+
+Total multi-class sampled images: 2342
+
+# Batch the dataset
+batch_size = 128
+train_dataset_batched = train_dataset.batch(batch_size, drop_remainder=True)
+val_dataset_batched = val_dataset.batch(batch_size, drop_remainder=True)
+
+
+# Check the dataset size after splitting and batching
+print(f"Size of train_dataset: {len(list(train_dataset_batched))}")
+print(f"Size of val_dataset: {len(list(val_dataset_batched))}")
+
+Size of train_dataset: 14
+Size of val_dataset: 3
+
+#  Inspect shapes after batching
+for image, (reconstruction_target, classification_target) in multi_class_dataset_batched.take(2):
+    print(f"Image shape: {image.shape}")
+    print(f"Reconstruction target shape: {reconstruction_target.shape}")
+    print(f"Classification target shape: {classification_target.shape}")
+
+Image shape: (128, 64, 64, 1)
+Reconstruction target shape: (128, 64, 64, 1)
+Classification target shape: (128, 3)
+Image shape: (128, 64, 64, 1)
+Reconstruction target shape: (128, 64, 64, 1)
+Classification target shape: (128, 3)
+
+
+
+import os
+
+os.environ["KERAS_BACKEND"] = "tensorflow"
+
+import numpy as np
+import tensorflow as tf
+
+import keras
+from keras import ops
+from keras import layers
+from keras import models
+from keras import optimizers
+from keras.optimizers import AdamW
+
+# Define activation choice with updated parameter
+activation_choice = 'LeakyReLU'  # Options: 'LeakyReLU' or 'ReLU'
+
+# Set activation function based on choice
+if activation_choice == 'LeakyReLU':
+    activation = layers.LeakyReLU(negative_slope=0.01)
+else:
+    activation = layers.ReLU()
+
+# Adjusted latent dimension for better feature capture
+latent_dim2 = 128  # Increased to capture more complex features
+
+# Define the Sampling class for the VAE
+class Sampling(layers.Layer):
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        batch = tf.shape(z_mean)[0]
+        dim = tf.shape(z_mean)[1]
+        epsilon = tf.random.normal(shape=(batch, dim))
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
+
+
+# Step 2.1: Define the encoder with Dropout and Batch Normalization
+def build_encoder2(input_shape=(64, 64, 1), latent_dim=latent_dim2):
+    encoder_inputs = layers.Input(shape=input_shape)
+    x = layers.Conv2D(32, (3, 3), strides=2, padding='same')(encoder_inputs)
+    x = layers.BatchNormalization()(x)
+    x = activation(x)
+    x = layers.Dropout(0.4)(x)
+    x = layers.Conv2D(64, (3, 3), strides=2, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = activation(x)
+    x = layers.Dropout(0.4)(x)
+    x = layers.Flatten()(x)
+    x = layers.Dense(64)(x)
+    x = layers.BatchNormalization()(x)
+    x = activation(x)
+    x = layers.Dropout(0.4)(x)
+    z_mean = layers.Dense(latent_dim, name="z_mean")(x)
+    z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
+    z = Sampling()([z_mean, z_log_var])
+    encoder = models.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder2")
+    return encoder
+
+encoder2 = build_encoder2()
+
+# Step 2.2: Define the decoder
+def build_decoder2(latent_dim=latent_dim2):
+    latent_inputs = layers.Input(shape=(latent_dim,))
+    x = layers.Dense(16 * 16 * 64)(latent_inputs)
+    x = layers.BatchNormalization()(x)
+    x = activation(x)
+    x = layers.Dropout(0.4)(x)
+    x = layers.Reshape((16, 16, 64))(x)
+    x = layers.Conv2DTranspose(64, (3, 3), strides=2, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = activation(x)
+    x = layers.Dropout(0.4)(x)
+    x = layers.Conv2DTranspose(32, (3, 3), strides=2, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = activation(x)
+    x = layers.Dropout(0.4)(x)
+    decoder_outputs = layers.Conv2DTranspose(1, (3, 3), activation='sigmoid', padding='same')(x)
+    decoder = models.Model(latent_inputs, decoder_outputs, name="decoder2")
+    return decoder
+
+decoder2 = build_decoder2()
+
+
+# Step 2.3: Build a simple classifier model for multi-class classification using the latent vectors.
+def build_classifier(latent_dim=latent_dim2):
+    classifier_inputs = layers.Input(shape=(latent_dim,))
+    x = layers.Dense(64, activation='relu')(classifier_inputs)
+    x = layers.Dropout(0.3)(x)
+    x = layers.Dense(32, activation='relu')(x)
+    x = layers.Dropout(0.3)(x)
+
+    # The output shape should match the batch size (None) and number of classes (3)
+    classifier_outputs = layers.Dense(3, activation='softmax')(x)  # Ensure batch-wise output
+    classifier = models.Model(classifier_inputs, classifier_outputs, name="classifier")
+    return classifier
+
+
+classifier = build_classifier()
+
+
+# Define the VAE class with custom training
+class VAE(tf.keras.Model):
+    def __init__(self, encoder, decoder, **kwargs):
+        super(VAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+
+    def call(self, inputs):
+        z_mean, z_log_var, z = self.encoder(inputs)
+        reconstructed = self.decoder(z)
+        return reconstructed
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var, z = self.encoder(data)
+            reconstructed = self.decoder(z)
+            reconstruction_loss = tf.reduce_mean(
+                tf.reduce_sum(tf.keras.losses.binary_crossentropy(data, reconstructed), axis=(1, 2))
+            )
+            kl_loss = -0.5 * tf.reduce_mean(
+                tf.reduce_sum(1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var), axis=1)
+            )
+            total_loss = reconstruction_loss + kl_loss
+
+        grads = tape.gradient(total_loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
+        return {"loss": total_loss, "reconstruction_loss": reconstruction_loss, "kl_loss": kl_loss}
+
+# Define input layer
+inputs = tf.keras.Input(shape=(64, 64, 1))
+
+# Get the outputs from the encoder, decoder, and classifier
+z_mean, z_log_var, z = encoder2(inputs)
+reconstruction_output = decoder2(z)
+classification_output = classifier(z)
+
+print(f"z_mean shape: {z_mean.shape}, z_log_var shape: {z_log_var.shape}, z shape: {z.shape}")
+
+z_mean shape: (None, 128), z_log_var shape: (None, 128), z shape: (None, 128)
+
+# Rename the outputs explicitly using Keras' Lambda layer
+reconstruction_output = tf.keras.layers.Lambda(lambda x: x, name='reconstruction_output')(reconstruction_output)
+classification_output = tf.keras.layers.Lambda(lambda x: x, name='classification_output')(classification_output)
+
+# Create the model with the renamed outputs
+vae_with_classifier_model = tf.keras.Model(
+    inputs=inputs,
+    outputs=[reconstruction_output, classification_output]
+)
+
+# Print output names to verify
+print("Model output names before compile:", vae_with_classifier_model.output_names)
+
+Model output names before compile: ListWrapper(['reconstruction_output', 'classification_output'])
+
+# Compile the model with correct output names in the loss function
+vae_with_classifier_model.compile(
+    optimizer=AdamW(learning_rate=0.001),
+    loss={
+        'classification_output': 'categorical_crossentropy',  # Classification loss
+        'reconstruction_output': 'mse'  # Reconstruction loss
+    },
+    metrics={'classification_output': 'accuracy'}  # Track accuracy for classification
+)
+
+# Print output names again after compile to confirm
+print("Model output names after compile:", vae_with_classifier_model.output_names)
+
+Model output names after compile: ListWrapper(['reconstruction_output', 'classification_output'])
+
+# Total sampled images for training
+total_sampled_images = len(sampled_normal_image_paths) + len(sampled_bacterial_image_paths) + len(sampled_viral_image_paths)
+
+# Steps per epoch calculation
+steps_per_epoch = total_sampled_images // batch_size
+
+print ("Batch size:", batch_size)
+print ("Total sample images:", total_sampled_images)
+print ("Steps per epoch:", steps_per_epoch)
+
+Batch size: 128
+Total sample images: 2342
+Steps per epoch: 18
+
+# Batch the dataset and repeat to avoid running out of data
+train_dataset = train_dataset.batch(batch_size, drop_remainder=True).repeat()
+val_dataset = val_dataset.batch(batch_size, drop_remainder=True).repeat()
+
+# Calculate steps per epoch based on dataset size and batch size
+steps_per_epoch = total_sampled_images // batch_size
+validation_steps = val_size // batch_size
+
+# Define learning rate scheduler
+def lr_scheduler2(epoch, lr):
+    if epoch % 10 == 0 and epoch > 0:
+        return lr * 0.8  # Reduce learning rate by 20% every 10 epochs
+    return lr
+
+# Create the learning rate scheduler callback
+lr_callback2 = tf.keras.callbacks.LearningRateScheduler(lr_scheduler2)
+early_stopping2 = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5)
+
+
+# Data Pipeline Optimization
+train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+val_dataset = val_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
+# Train the model
+history = vae_with_classifier_model.fit(
+    train_dataset,
+    validation_data=val_dataset,
+    epochs=50,
+    steps_per_epoch=steps_per_epoch,
+    validation_steps=validation_steps,
+    callbacks=[early_stopping2, lr_callback2]
+)
+
+
+
+
+
+
+

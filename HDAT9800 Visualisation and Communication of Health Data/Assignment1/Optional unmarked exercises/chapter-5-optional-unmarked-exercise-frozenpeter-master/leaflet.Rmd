@@ -1,0 +1,121 @@
+---
+title: "HDAT9800 Chapter 5 Optional Unmarked Exercise"
+author: "<insert your name here>"
+date: "xx/xx/2024"
+output:
+  html_document:
+    self_contained: false
+    includes:
+      in_header: header.html
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(leaflet)
+```
+
+## Introduction
+
+This is an exercise in embedding _leaflet_ maps in a markdown document.
+
+Complete the following tasks. The exercise is umarked and does not attarct any marks for the HDAT9800 course.
+
+You will need to load any libraries you need in the setup chunk.
+If your solution needs a library that has not been used so far this semester
+(it should not need to) please include dependencies and instructions and be aware
+that if it can't be made to run, the marks available are severely diminished.
+Play it safe and don't be too fancy!
+
+## Task 1: A basic ma
+
+Include a basic map below that has a marker at the Sydney GPO labelled 'Sydney GPO'.
+The Sydney GPO is at 33°52′04″S 151°12′28″E.
+
+```{r gpo}
+# include your GPO map here
+```
+
+## Task 2: Custom icons
+
+Code (from the `header.html` file) has been included in the header of this tutorial
+(look at the `output:` section of the YAML meta-data at the top of the document)
+to include a font which has icons in it.
+
+A value for the `icons` argument to _addAwesomeMarkers()_ can be constructed using
+
+```
+icons <- awesomeIcons(icon="envelope", library="fa")
+```
+
+replace the _addMarkers()_ line in your pipeline with _addAwesomeMarkers()._
+Use the code above to define an `icons` variable
+and use it as an argument to `_addAwesomeMarkers()` to add the icon.
+The other arguments to _addAwesomeMarkers()_ are the same as for _addMarkers()._
+
+Add extra `iconColor` and `markerColor` arguments to _awesomeIcons()_ to make
+the icon colour `#fff` and the marker colour `red`.
+
+```{r white-gpo}
+# include your custom marker map here
+```
+
+## Loading some spatial data
+
+We're going to load some spatial data with polygons for 2011 postcode boundaries from the ABS.
+So you don't have to load extra libraries we're already loaded the shape files provided
+by the ABS and saved the resulting data frames in two files:
+
+  * `ABS_postcodes_2011.rds`
+  * `ABS_postcodes_2011@data.rds`
+
+To load these you we run the following code in a chunk.
+The shape information is actually split into two different data frames which must both be loaded.
+
+```{r load_polygons}
+postcodes <- readRDS("ABS_postcodes_2011.rds")
+postcodes@data <- readRDS("ABS_postcodes_2011@data.rds")
+```
+
+Once you have done this you can look at the data (without the polygon information) as follows
+
+```{r examine_data}
+head(postcodes@data)
+```
+
+We're interested in the `POA_NAME` field.
+
+To extract the polygon for a particular postcode we can run:
+
+```
+# the postcode for the suburbs Paddington and Centennial Park is 2021
+paddington <- postcodes[postcodes$POA_NAME=="2021",]
+```
+
+## Task 3: Highlighting polygons
+
+  * extract the polygons for Kensington (postcode 2033) and UNSW (postcode 2052)
+  * add a map with a polygon for Kensington shaded in the default colour and for UNSW in `red`
+
+`addPolygons(map, data=polygon)` will add the polygon data in `polygon`.
+
+```{r kensington}
+# include your polygon map here
+```
+
+## Task 4: Interactivity 
+
+Add the information in tasks 2 and 3 into one map with an iteractive menu
+using _addLayersControl()._
+The menu should allow the following three layers to be turned on or off:
+
+  * the GPO marker
+  * the Kensington boundary
+  * the UNSW boundary
+  
+You will need to add a `group` argument to the three layers in order to control them.
+  
+Add the options `layersControlOptions(collapsed = FALSE)` to the layer controls.
+
+```{r interactive}
+# include your interactive map here
+```

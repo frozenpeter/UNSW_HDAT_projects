@@ -1,0 +1,1312 @@
+---
+title: "HDAT9600 Final Team Assignment"
+subtitle: "Submission deadline - 03-May-2024"
+author: "Team 3: Michelle Kim z5161954, Georgina Jacko z5441162, Harvey Lee z , Zhenyu Zhang z  "
+date: "`r Sys.Date()`"
+output: 
+  html_document
+---
+```{r setup, include=FALSE}
+# see the knitr documentation for details
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.width=8, fig.height=8)
+
+# List of required packages
+required_packages <- c("boot", "bshazard", "car", "caret", "datadictionary", "DescTools", 
+                       "eha", "dplyr", "finalfit", "flexsurv", "ggplot2", "ggfortify", 
+                       "glmnet", "kableExtra", "knitr", "MASS", "muhaz", "pch", "pROC", 
+                       "ranger", "ROCR", "shiny", "stats", "stringi", "summarytools", 
+                       "survminer", "survival", "tidyr", "tidyverse", "gridExtra", "png")
+
+# Load the packages using the custom function
+
+# Custom function to install and load packages
+load_package <- function(package) {
+  if (!require(package, character.only = TRUE)) {
+    install.packages(package, repos = "https://cloud.r-project.org")
+    library(package, character.only = TRUE)
+  }
+}
+
+#load associated library's 
+library(boot)
+library(bshazard)
+library(car)
+library(caret)
+library(datadictionary)
+library(DescTools)
+library(eha)
+library(dplyr)
+library(finalfit)
+library(flexsurv)
+library(ggplot2)
+library(ggfortify)
+library(glmnet)
+library(gridExtra)
+library(kableExtra)
+library(knitr)
+library(MASS)
+library(muhaz)
+library(pch)
+library(pROC)
+library(ranger)
+library(ROCR)
+library(shiny)
+library(stats)
+library(stringi)
+library(summarytools)
+library(survminer)
+library(survival)
+library(tidyr)
+library(tidyverse)
+library(gridExtra)
+library(png)
+```
+
+<!--- task summary
+## Instructions can delete prior to submission 
+- This assignment is assessed and will count for 30% of the total course marks.
+- The assignment comprises two tasks. The first task will focus on building a model to **PREDICT** an outcome and the second task will focus on using a model to **EXPLAIN** the relationships between a variable of interest and the outcome.
+
+
+The dataframe consists of 120 variables, which are defined as follows:
+
+#### Patient Descriptor Variables
+<li> <em>RecordID:</em>            a unique integer for each ICU stay</li>
+<li> <em>Age:</em>                 years</li>
+<li> <em>Gender:</em>              male/female</li>
+<li> <em>Height:</em>              cm</li>
+<li> <em>ICUType:</em>             Coronary Care Unit; Cardiac Surgery Recovery Unit; Medical ICU; Surgical ICU</li>
+<li> <em>Length_of_stay:</em>      The number of days between the patient’s admission to the ICU and the end of hospitalisation</li>
+<li> <em>Survival:</em>            The number of days between ICU admission and death for patients who died</li>
+
+
+#### Outcome Variables
+<li> <em>in_hospital_death:</em>   0:survivor/1:died in-hospital **this is the outcome variable for Task 1: Logistic Regression**</li>
+<li> <em>Status:</em>              True/False **this is the censoring variable for Task 2: Survival Analysis**</li>
+<li> <em>Days:</em>                Length of survival (in days) **this is the survival time variable for Task 2: Survival Analysis**</li>
+
+
+#### Clinical Variables
+<em>Use the hyperlinks below to find out more about the clinical meaning of each variable.</em>
+The first two clinical variables are summary scores that are used to assess patient condition and risk.
+
+* SAPS-I score - Simplified Acute Physiological Score [Le Gall et al., 1984](http://www.ncbi.nlm.nih.gov/pubmed/6499483)
+* SOFA score - Sequential Organ Failure Assessment [Ferreira et al., 2001](http://www.ncbi.nlm.nih.gov/pubmed/11594901)
+
+###
+
+The following 36 clinical measures were assessed at multiple timepoints during each patients ICU stay. For each of the 36 clinical measures, you are given 3 summary variables: a) The minimum value during the first 24 hours in ICU (_min), b) The maximum value during the first 24 hours in ICU (_max), and c) The difference between the mean and the most extreme values during the first 24 hours in ICU (_diff). For example, for the clinical measure Cholesterol, these three variables are labelled 'Cholesterol_min', 'Cholesterol_max', and 'Cholesterol_diff'.
+
+* [Albumin](http://en.wikipedia.org/wiki/Human_serum_albumin)
+ (g/dL)
+* [ALP](http://en.wikipedia.org/wiki/Alkaline_phosphatase)
+ [Alkaline phosphatase (IU/L)]
+* [ALT](http://en.wikipedia.org/wiki/Alanine_transaminase)
+ [Alanine transaminase (IU/L)]
+* [AST](http://en.wikipedia.org/wiki/Aspartate_transaminase)
+ [Aspartate transaminase (IU/L)]
+* [Bilirubin](http://en.wikipedia.org/wiki/Bilirubin)
+ (mg/dL)
+* [BUN](http://en.wikipedia.org/wiki/BUN)
+ [Blood urea nitrogen (mg/dL)]
+* [Cholesterol](http://en.wikipedia.org/wiki/Cholesterol)
+ (mg/dL)
+* [Creatinine](http://en.wikipedia.org/wiki/Serum_creatinine#Plasma_creatinine)
+ [Serum creatinine (mg/dL)]
+* [DiasABP](http://en.wikipedia.org/wiki/Diastolic_blood_pressure)
+ [Invasive diastolic arterial blood pressure (mmHg)]
+* [FiO2](http://en.wikipedia.org/wiki/FIO2)
+ [Fractional inspired O<sub>2</sub> (0-1)]
+* [GCS](http://en.wikipedia.org/wiki/Glasgow_coma_score)
+ [Glasgow Coma Score (3-15)]
+* [Glucose](http://en.wikipedia.org/wiki/Serum_glucose)
+ [Serum glucose (mg/dL)]
+* [HCO3](http://en.wikipedia.org/wiki/Bicarbonate#Diagnostics)
+ [Serum bicarbonate (mmol/L)]
+* [HCT](http://en.wikipedia.org/wiki/Hematocrit)
+ [Hematocrit (%)]
+* [HR](http://en.wikipedia.org/wiki/Heart_rate)
+ [Heart rate (bpm)]
+* [K](http://en.wikipedia.org/wiki/Hypokalemia)
+ [Serum potassium (mEq/L)]
+* [Lactate](http://en.wikipedia.org/wiki/Lactic_acid)
+ (mmol/L)
+* [Mg](http://en.wikipedia.org/wiki/Magnesium#Biological_role)
+ [Serum magnesium (mmol/L)]
+* [MAP](http://en.wikipedia.org/wiki/Mean_arterial_pressure)
+ [Invasive mean arterial blood pressure (mmHg)]
+* [MechVent](http://en.wikipedia.org/wiki/Mechanical_ventilation)
+ [Mechanical ventilation respiration (0:false, or 1:true)]
+* [Na](http://en.wikipedia.org/wiki/Serum_sodium)
+ [Serum sodium (mEq/L)]
+* [NIDiasABP](http://en.wikipedia.org/wiki/Diastolic_blood_pressure)
+ [Non-invasive diastolic arterial blood pressure (mmHg)]
+* [NIMAP](http://en.wikipedia.org/wiki/Mean_arterial_pressure)
+ [Non-invasive mean arterial blood pressure (mmHg)]
+* [NISysABP](http://en.wikipedia.org/wiki/Systolic_blood_pressure)
+ [Non-invasive systolic arterial blood pressure (mmHg)]
+* [PaCO2](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [partial pressure of arterial CO<sub>2</sub> (mmHg)]
+* [PaO2](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [Partial pressure of arterial O<sub>2</sub> (mmHg)]
+* [pH](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [Arterial pH (0-14)]
+* [Platelets](http://en.wikipedia.org/wiki/Platelets)
+ (cells/nL)
+* [RespRate](http://en.wikipedia.org/wiki/Respiratory_physiology)
+ [Respiration rate (bpm)]
+* [SaO2](http://en.wikipedia.org/wiki/Arterial_blood_gas)
+ [O<sub>2</sub> saturation in hemoglobin (%)]
+* [SysABP](http://en.wikipedia.org/wiki/Systolic_blood_pressure)
+ [Invasive systolic arterial blood pressure (mmHg)]
+* [Temp](http://en.wikipedia.org/wiki/Normal_human_body_temperature)
+ [Temperature (&deg;C)]
+* [TropI](http://en.wikipedia.org/wiki/Troponin)
+ [Troponin-I (&mu;g/L)]
+* [TropT](http://en.wikipedia.org/wiki/Troponin)
+ [Troponin-T (&mu;g/L)]
+* [Urine](http://en.wikipedia.org/wiki/Fluid_balance)
+ [Urine output (mL)]
+* [WBC](http://en.wikipedia.org/wiki/Reference_ranges_for_blood_tests#Hematology)
+ [White blood cell count (cells/nL)]
+* Weight (kg)
+
+
+## Aims of your project
+
+You have two analytic goals in this assignment. 
+1. The first goal (Task 1) is to build a model to PREDICT in-hospital death. The context for this is that the hospital management wishes to use this model to prioritise the allocation of resources with the overarching aim of improving patient survival.  
+2. The second goal (Task 2) is to try to understand and EXPLAIN how survival varies by `Age`. How does survival change with increasing Age? Are age-related survival differences explained solely by differing clinical characteristics of patients? 
+--->
+
+<!--- instructions 1A
+
+Conduct a brief EDA for the dataset `icu_patients_df1`. One of your goals for this EDA should be to identify a sub-set of variables (approx 15-20 variables) that _may_ be useful predictors of survival and/or relevant to your analytical task. You may wish to firstly undertake a brief literature review to try to identify factors that may be important predictors of survival in an ICU. This doesnt need to be in-depth, but enough to get a basic idea of what the variables are measuring and which variables might, in theory, be most important. 
+
+For the 15-20 chosen variables, present enough information to: (i) explain why you selected these variables, based on a combination of your literature review and EDA, and (ii) Provide an overview of the variables and how they are related to `in-hospital death`. Present your summary using tables and/or plots with supporting commentary where relevant. 
+--->
+### Task 1 Part A: Exploratory data analysis
+```{r task0 read and check, include=FALSE}
+mydat <- file.path("C:/Users/froze/OneDrive/Documents/2.1 UNSW bioinfo/HDAT9600/Assignment/Group/HDAT9600_Assign4_GroupProject")
+icu_patients_df0 <- readRDS(file.path(mydat,"icu_patients_df0.rds"))
+icu_patients_df1 <- readRDS(file.path(mydat,"icu_patients_df1.rds"))
+
+#summary(icu_patients_df1) #useful for initial checks
+#str(icu_patients_df1) # Structure of the dataset
+#glimpse(icu_patients_df1) #quickly see the entirety of the data frame's structure and less likely to truncate
+
+# Function to calculate and print missing, NaN, infinite values, and unique patient counts
+analyze_data_issues <- function(df, df_name) {
+  # Calculate missing values
+  missing_values <- colSums(is.na(df))
+  missing_values <- missing_values[missing_values > 0]
+
+  # Calculate NaN and infinite values
+  nan_inf_values <- sapply(df, function(x) sum(is.nan(x) | is.infinite(x)))
+  nan_inf_values <- nan_inf_values[nan_inf_values > 0]
+
+  # Calculate unique patient counts
+  unique_patients <- length(unique(df$RecordID))
+
+  # Print the results
+  cat("\n---", df_name, "---\n")
+  cat("\nMissing Values:\n")
+  print(missing_values)
+  cat("\nNaN or Infinite Values:\n")
+  print(nan_inf_values)
+  cat("\nNumber of Unique Patients:\n")
+  print(unique_patients)
+  
+  # Return the results as a list
+  return(list(missing_values = missing_values, nan_inf_values = nan_inf_values, unique_patients = unique_patients))
+}
+
+# Apply the function to both data frames and store results
+results_df0 <- analyze_data_issues(icu_patients_df0, "ICU Patients DF0")
+results_df1 <- analyze_data_issues(icu_patients_df1, "ICU Patients DF1")
+
+```
+
+#### Step 1: Data Clean
+```{r Step 1 Data Clean A Checking NaN or infinite values, include=FALSE}
+# Calculate the sum of NaN and infinite values for each specified model variable #df1 data does not has NaN or infinite values, thus skip this step
+nan_inf_counts_df0 <- sapply(icu_patients_df0, function(x) {
+  sum(is.nan(x) | is.infinite(x))  # Check for both NaN and infinite values
+})
+
+# Convert NaN and infinite values to NA across all columns
+icu_patients_df0[] <- lapply(icu_patients_df0, function(x) {
+  x[is.nan(x) | is.infinite(x)] <- NA
+  return(x)
+})
+
+# Print summary to verify changes or for debugging # Optional
+#nan_inf_counts_df0_after <- sapply(icu_patients_df0, function(x) {
+#  sum(is.nan(x) | is.infinite(x))  # Recheck for both NaN and infinite values
+#})
+#cat("\nnNaN or Infinite Values:\n")
+#print(nan_inf_counts_df0_after)
+```
+
+```{r Step 1 Data Clean B Handling Missing Data for df0, include=FALSE}
+# Initial type conversions and handling of illogical values
+icu_patients_df0_conv <- icu_patients_df0 %>%
+  mutate(
+    SAPS1 = if_else(SAPS1 < 0, NA_real_, as.integer(SAPS1)),
+    SOFA = if_else(SOFA < 0, NA_real_, as.integer(SOFA)),
+    Length_of_stay = if_else(Length_of_stay < 0, abs(Length_of_stay), Length_of_stay),
+    Age = as.integer(Age),
+    GCS_max = as.integer(GCS_max),
+    Gender = as.factor(Gender),
+    ICUType = as.factor(ICUType),
+    Status_Label = factor(Status, levels = c(FALSE, TRUE), labels = c("Survived", "Died")),
+    LR_in_hospital_death = factor(in_hospital_death, levels = c(0, 1), labels = c("Survived", "Died"))
+  )
+
+missing_threshold <- 0.1 # Set a threshold for maximum acceptable proportion of missing data
+# Calculate the proportion of missing data for each variable
+prop_missing_df0 <- colSums(is.na(icu_patients_df0_conv)) / nrow(icu_patients_df0_conv)
+vars_to_exclude_df0 <- names(prop_missing_df0[prop_missing_df0 > missing_threshold])
+cat("Variables should be excluded due to high missing data in df0:\n")
+print(vars_to_exclude_df0)
+
+# Make a copy of the data frame to clean # as we need to keep the massing values in df0 to do the comparison, no missing values Impute will be applied on df0 data
+icu_patients_df0_cleaned <- icu_patients_df0_conv
+
+# Variables intended for the model (these are get from following step, can be modified)
+model_vars_df0 <- c("Age", "SAPS1", "SOFA", "Albumin_max", "ALT_max", "AST_max", 
+                         "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "GCS_min", 
+                         "HR_diff", "Lactate_max", "Na_diff", "NISysABP_diff", "PaO2_max", 
+                         "pH_diff", "Temp_diff", "Urine_max", "WBC_max", "ICUType")
+
+# Variables intended for the model and check for exclusion due to high missing data
+excluded_model_vars <- intersect(model_vars_df0, vars_to_exclude_df0)
+cat("\nVariables intended for the model have high missing data and will be excluded in df0:\n")
+print(excluded_model_vars)
+
+# Exclude variables with high missing data from the dataframe
+icu_patients_df0_exclude <- icu_patients_df0_conv[, !(names(icu_patients_df0_conv) %in% vars_to_exclude_df0)]
+
+# Update model_vars_df0 to only include variables that are still in icu_patients_df0_exclude
+model_vars_df0 <- intersect(model_vars_df0, names(icu_patients_df0_exclude))
+
+# Check for remaining missing data in the cleaned dataset
+missing_data_post_impute <- colSums(is.na(icu_patients_df0_exclude[model_vars_df0]))
+cat("\nRemaining missing values in the exclude df0 data:\n")
+print(missing_data_post_impute)
+
+# Make a copy
+icu_patients_df0_impute <- icu_patients_df0_exclude
+# Variables for which to impute missing values using the median
+vars_to_impute <- c("SAPS1", "SOFA")
+
+# Impute missing values for each specified variable using median
+for (var in vars_to_impute) {
+  if (sum(is.na(icu_patients_df0_impute[[var]])) > 0) {  # Check if there are NA values to impute
+    icu_patients_df0_impute[[var]][is.na(icu_patients_df0_impute[[var]])] <- median(icu_patients_df0_impute[[var]], na.rm = TRUE)
+  }
+}
+
+# Check for remaining missing data in the cleaned dataset
+missing_data_after_impute <- colSums(is.na(icu_patients_df0_impute[model_vars_df0]))
+cat("\nRemaining missing values in the Impute df0 data:\n")
+print(missing_data_after_impute)
+
+```
+
+```{r Step 1 Data Clean C Handling Missing Data for df1, include=FALSE}
+# Initial type conversions and handling of illogical variables
+icu_patients_df1_conv <- icu_patients_df1 %>%
+  mutate(
+    SAPS1 = if_else(SAPS1 < 0, NA_real_, as.integer(SAPS1)),
+    SOFA = if_else(SOFA < 0, NA_real_, as.integer(SOFA)),
+    Length_of_stay = if_else(Length_of_stay < 0, abs(Length_of_stay), Length_of_stay),
+    Age = as.integer(Age),
+    GCS_max = as.integer(GCS_max),
+    Gender = as.factor(Gender),
+    ICUType = as.factor(ICUType),
+    Status_Label = factor(Status, levels = c(FALSE, TRUE), labels = c("Survived", "Died")),
+    LR_in_hospital_death = factor(in_hospital_death, levels = c(0, 1), labels = c("Survived", "Died"))
+  )
+
+
+# Set a threshold for maximum acceptable proportion of missing data
+missing_threshold <- 0.3
+# Calculate the proportion of missing data for each variable
+prop_missing <- colSums(is.na(icu_patients_df1_conv)) / nrow(icu_patients_df1_conv)
+# Identify variables to exclude based on the threshold
+vars_to_check <- setdiff(names(icu_patients_df1_conv), "Survival") # Exclude the 'Survival' variable from the evaluation for missing data
+vars_to_exclude_df1 <- names(prop_missing[vars_to_check][prop_missing[vars_to_check] > missing_threshold])
+cat("Variables to be excluded due to high missing data in df1:\n")
+print(vars_to_exclude_df1)
+#vars_to_include_df1 <- setdiff(names(icu_patients_df1_conv), vars_to_exclude_df1)
+
+# Identify variables to impute
+vars_to_impute <- names(prop_missing[prop_missing <= missing_threshold & prop_missing > 0])
+# Make a copy of the data frame to clean
+icu_patients_df1_cleaned <- icu_patients_df1_conv
+# Impute missing values for selected variables using median
+for(var in vars_to_impute) {
+  icu_patients_df1_cleaned[[var]][is.na(icu_patients_df1_cleaned[[var]])] <- median(icu_patients_df1_cleaned[[var]], na.rm = TRUE)
+}
+# Now exclude the variables with too much missing data from the cleaned dataframe
+icu_patients_df1_cleaned <- icu_patients_df1_cleaned[ , !(names(icu_patients_df1_cleaned) %in% vars_to_exclude_df1)]
+
+# Check if there are any remaining missing values
+missing_values <- colSums(is.na(icu_patients_df1_cleaned))
+missing_values <- missing_values[missing_values > 0]
+cat("Remaining missing values in the cleaned df1 data:\n")
+print(missing_values)
+
+# Print the number of observations after cleaning
+print(paste("Number of observations after cleaning in df1:", nrow(icu_patients_df1_cleaned)))
+
+```
+
+- **Unique Patient Count: **There were `r results_df0$unique_patients` and `r results_df1$unique_patients`unique patients contained in the dataset df0 and df1, confirming dataset consistency in terms of patient entries across both versions.<br>
+- **NaN or Infinite Values: ** 
+    - *DF0*: There are variables with NaN or infinite values such as `Height`, `DiasABP_diff`, `SysABP_diff`, and others mainly associated with blood pressure and weight (`r sum(is.na(icu_patients_df0_conv$Weight_diff))` for easch of `Weight_diff`, `Weight_max`, `Weight_min`). All of them has been Converted to NA.
+    - *DF1*: No NaN or infinite values reported, which indicates either preprocessing steps were different or the issues were resolved in this version of the dataset.<br>
+
+- **Missing Values in df1: ** 
+    - We set a **30%** threshold for maximum acceptable proportion of missing data in df1, and impute missing values for acceptable variables using median.
+    - *High Missingness in Both Datasets*: Both datasets show significant numbers of missing values across various variables, particularly clinical measurements like `Albumin_diff`, `ALP_diff`, `Bilirubin_max`, and physiological parameters like `DiasABP_max`, `NIDiasABP_max`, etc. 
+    - `Height` (`r sum(is.na(icu_patients_df1_conv$Height))`, `r round((sum(is.na(icu_patients_df1_conv$Height))/length(icu_patients_df1_conv$Height))*100,2)`% missing) given the high rate of missing values, and low probability of importance to clinical outcome it has been excluded.
+    - Blood pressure-related variables (`DiasABP_diff`, `DiasABP_max`, `DiasABP_min`, `NIDiasABP_diff`, `NIDiasABP_max`, `NIDiasABP_min`, `NIMAP_diff`, `NIMAP_max`, `NIMAP_min`, `NISysABP_diff`, `NISysABP_max`, `NISysABP_min`, `SysABP_diff`, `SysABP_max`, `SysABP_min`): All these have a high degree of missingness. Since these are many related variables with substantial missing data, we therefore considered only MAP, given the complete information.
+    - *Survival Variable*: A crucial variable like `Survival` has a notably high count of missing values (`r missing_values`）, as it is the number of days between ICU admission and death for patients who died. Thus, no missing values impute for it.
+    - *SAPS1*: `SAPS1` has `r sum(is.na(icu_patients_df1_conv$SAPS1))` missing values ( `r (sum(is.na(icu_patients_df1_conv$SAPS1)) / nrow(icu_patients_df1_conv)) *100` % missing), which is a relatively small proportion of the dataset. Since SAPS-I is an important score for ICU prognosis, it might be worth imputing these values in df1 rather than excluding the variable.
+    - *Weight-related variables* (`Weight_diff`, `Weight_max`, `Weight_min`): `r sum(is.na(icu_patients_df1_conv$Weight_diff))` missing values (`r round((sum(is.na(icu_patients_df1_conv$Weight_diff))/length(icu_patients_df1_conv$Weight_diff))*100,2)`% missing) - Given this is a smaller proportion of missing data and weight is possibly an important variable for analysis it may be worth imputing values.
+
+- **Variables to be excluded from df1 dataset due to high missing data:** `r vars_to_exclude_df1`
+
+- **Remaining total missing values in the cleaned df1 dataset:** There are `r vars_to_impute` with total `r missing_values` missing values remaining. Given the complexity and breadth of clinical data, such a level of missingness can be considered manageable, particularly the missing values are spread across multiple variables rather than concentrated in a few. 
+
+
+#### Step 2: Exploratory data analysis
+**Demographics**<br>
+```{r task1.A_1 Demographics summary, include=FALSE}
+# Overall Demographics Summary
+overall_demo <- summary(icu_patients_df1_cleaned[c("Age", "Weight_max", "Weight_min", "SOFA", "SAPS1")])
+kable(overall_demo, caption = "Overall Demographics Summary", format = "markdown")
+
+# Split the dataset into survivors and non-survivors
+survivors_df <- icu_patients_df1_cleaned[icu_patients_df1_cleaned$in_hospital_death == 0, ]
+deceased_df <- icu_patients_df1_cleaned[icu_patients_df1_cleaned$in_hospital_death == 1, ]
+
+# Summary for Survivors
+survivors_demo <- summary(survivors_df[c("Age", "Weight_max", "Weight_min", "Length_of_stay", "SOFA", "SAPS1")])
+kable(survivors_demo, caption = "Demographics Summary for Survivors", format = "markdown")
+
+# Summary for Non-Survivors
+deceased_demo <- summary(deceased_df[c("Age", "Weight_max", "Weight_min", "Length_of_stay", "Survival", "SOFA", "SAPS1")])
+kable(deceased_demo, caption = "Demographics Summary for Non-Survivors", format = "markdown")
+
+
+# Create a table for Gender Distribution, Number of in hospital Deaths, and ICU Types
+# Calculate the required numbers and percentages
+patients_count <- nrow(icu_patients_df1_cleaned)
+gender_counts <- table(icu_patients_df1_cleaned$Gender)
+gender_percentages <- prop.table(gender_counts) * 100
+death_counts <- sum(icu_patients_df1_cleaned$in_hospital_death, na.rm = TRUE)
+death_percentage <- (death_counts / patients_count) * 100
+icu_type_counts <- table(icu_patients_df1_cleaned$ICUType)
+icu_type_percentages <- prop.table(icu_type_counts) * 100
+
+# Create a data frame with the calculated values
+demographics_table <- data.frame(
+  Category = c("Number_of_Patients",
+               "Gender: Male",
+               "Gender: Female",
+               "in_hospital_death",
+               "ICU Types: Coronary Care Unit",
+               "ICU Types: Cardiac Surgery Recovery Unit",
+               "ICU Types: Medical ICU",
+               "ICU Types: Surgical ICU"),
+  Number = c(patients_count,
+             gender_counts["Male"],
+             gender_counts["Female"],
+             death_counts,
+             icu_type_counts["Coronary Care Unit"],
+             icu_type_counts["Cardiac Surgery Recovery Unit"],
+             icu_type_counts["Medical ICU"],
+             icu_type_counts["Surgical ICU"]),
+  Percentage = c(NA,  # Placeholder for total patients percentage
+                 gender_percentages["Male"],
+                 gender_percentages["Female"],
+                 death_percentage,
+                 icu_type_percentages["Coronary Care Unit"],
+                 icu_type_percentages["Cardiac Surgery Recovery Unit"],
+                 icu_type_percentages["Medical ICU"],
+                 icu_type_percentages["Surgical ICU"])
+)
+
+# Use kable to print the table
+kable(demographics_table, caption = "Demographics Summary 2", align = c('l', 'r', 'r'), format = "markdown")
+
+```
+
+
+```{r Step 2 EDA A Overall Demographics, fig.height=6, fig.width=10, echo=FALSE}
+# Plotting age distribution by survival status using density curves with filled areas
+density_plot <- ggplot(icu_patients_df1_cleaned, aes(x = Age, fill = LR_in_hospital_death, color = LR_in_hospital_death)) + 
+  geom_density(alpha = 0.2) +  # Density plot with transparency; Adjusting the alpha transparency might be necessary to best fit your data visualization preferences.
+  facet_grid(Gender ~ ICUType, scales = "free", margins = TRUE) +  # Including totals with free scales for each facet
+  scale_fill_manual(values = c("Survived" = "skyblue", "Died" = "plum")) +  # Manually set colors for fill
+  scale_color_manual(values = c("Survived" = "skyblue", "Died" = "plum")) +  # Manually set colors for lines
+  labs(title = "Age Distribution by Survival Status, Gender, and ICU Type",
+       x = "Age",
+       y = "Density",
+       fill = "Survival Status",
+       color = "Survival Status") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(hjust = 1),  # Enhancing x-axis labels readability
+        legend.position = "bottom")
+
+
+# Proportion plot for comparison
+proportion_plot <- icu_patients_df1_cleaned %>%
+  group_by(ICUType, LR_in_hospital_death) %>%
+  summarise(Count = n(), .groups = 'drop') %>%
+  group_by(ICUType) %>%
+  mutate(Total = sum(Count)) %>%
+  mutate(Proportion = Count / Total) %>%
+  ungroup() %>%
+  ggplot(aes(x = ICUType, y = Proportion, fill = LR_in_hospital_death)) +
+  geom_bar(stat = "identity", position = position_fill(), width = 0.7) +
+  scale_fill_manual(values = c("Survived" = "skyblue", "Died" = "plum")) +
+  labs(title = "Proportion of Survivors and Hospital Deaths by ICU Type",
+       x = "ICU Type",
+       y = "Proportion",
+       fill = "Survival Status") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+# Combine plots using gridExtra
+combined_plot <- grid.arrange(density_plot, proportion_plot, ncol = 2, widths = c(5, 1))
+
+```
+There were `r nrow(icu_patients_df1_cleaned)` patients in total, with a higher proportion of males (approximately `r round(mean(icu_patients_df1_cleaned$Gender == "Male") * 100, 2)`%) compared to females.
+- The proportion of patients who died in the hospital was about `r round(mean(icu_patients_df1_cleaned$LR_in_hospital_death == "Died") * 100, 2)`%. Patients range in age from `r min(icu_patients_df1_cleaned$Age)` to `r max(icu_patients_df1_cleaned$Age)`, with a median age of `r median(icu_patients_df1_cleaned$Age)`, suggesting a predominantly older patient population. Survivors have a slightly lower mean age (`r round(mean(icu_patients_df1_cleaned$Age[icu_patients_df1_cleaned$LR_in_hospital_death == "Survived"]), 2)`) compared to the overall (`r round(mean(icu_patients_df1_cleaned$Age), 2)`) and non-survivor (`r round(mean(icu_patients_df1_cleaned$Age[icu_patients_df1_cleaned$LR_in_hospital_death == "Died"]), 2)`) groups. The distribution of patients across ICU types shows the largest number in the Medical ICU (`r round(mean(icu_patients_df1_cleaned$ICUType == "Medical ICU") * 100, 2)`%) and the least in the Coronary Care Unit (`r round(mean(icu_patients_df1_cleaned$ICUType == "Coronary Care Unit") * 100, 2)`%). As Height has been excluded from both datasets and weight excluded from df0 due to high missing data, no more consideration.
+
+Survival in a hospital ICU is influenced by numerous factors. Older age is often associated with a higher risk of death in an ICU, and this is supported by the plots showing a notable difference in the distribution of age for survivor and in hospital died patients. The plots shows very similar proportions of survivors/in-hospital deaths for each gender, suggesting it is also not a useful predictor, the plots for ICU type showed notably different proportions of survivors/in-hospital deaths per ICU type, with a significantly higher chance of survival in the cardiac surgery recovery unit, suggesting it may have some value as a predictor.
+
+**Clinical measures**<br>
+Clinical measures are critical in predicting ICU survival as they encapsulate various facets of a patient's physiological state. In our dataset, we have segregated 36 clinical measures into different physiological systems for for fitting **Generalized Linear Models (GML)** to get the potential predictors for our model. <br>
+  - **Respiratory Function** is captured by PaO2, FiO2, and RespRate.
+  - **Coagulation & Blood** metrics include Platelets, pH, and Glucose.
+  - **Liver Function** is indicated by Bilirubin, Albumin, ALP, ALT, and AST.
+  - **Cardiovascular System** measures comprise HR, MAP, TroponinI, TroponinT, and Lactate.
+  - **Central Nervous System** is assessed primarily through GCS.
+  - **Renal Function** involves Creatinine and Urine output.
+  - **Immune System** response is gauged by Temperature and WBC counts.<br>
+
+Each clinical measures represented by up to three types of variables: the minimum (_min), the maximum (_max), and the difference (_diff) observed during the first 24 hours in the ICU. Furthermore, for variables like arterial blood pressure, both invasive and non-invasive measurements are taken into account, reflecting systolic, diastolic, and mean arterial pressures. Given the logistic regression's sensitivity to multicollinearity, it is imperative to select the most representative variable among related measures to avoid high correlations that could skew model accuracy. Therefore, our analysis aims to discern not just the significance of each clinical measure in predicting ICU outcomes, but also to identify which among the related variables (minimum, maximum, or difference) most effectively captures the impact on survival. This approach helps in honing in on the most critical predictors and reduces redundancy in the model.
+
+Significant predictors identified include elevated levels of Albumin, AST, Bilirubin, BUN, Creatinine, GCS, Glucose, HCO3, Lactate, respiratory rate, and urine output, suggesting that their maximum values during the first 24 hours are pivotal. Conversely, substantial changes in heart rate, sodium levels, pH, temperature, and non-invasive systolic blood pressure (_diff variables) are strongly associated with ICU mortality, emphasizing the impact of acute fluctuations in physiological states.
+
+
+```{r Step 2 EDA A clinical measures, fig.width=10, include=FALSE}
+# Define the variables to summarize
+variables_to_summarize <- c("Age", "SAPS1", "SOFA", "Albumin_max", "AST_max", "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "Glucose_max", "HCO3_max", 
+                            "HR_diff", "Lactate_max", "Na_diff", "pH_diff", "RespRate_max", "Temp_diff", "Urine_max", 
+                            "NISysABP_diff")
+
+# Function to calculate descriptive statistics
+calc_descriptives <- function(data, variable) {
+    summarise(data, Min = min(.data[[variable]], na.rm = TRUE),
+                    Q1 = quantile(.data[[variable]], 0.25, na.rm = TRUE),
+                    Median = median(.data[[variable]], na.rm = TRUE),
+                    Q3 = quantile(.data[[variable]], 0.75, na.rm = TRUE),
+                    Max = max(.data[[variable]], na.rm = TRUE))
+}
+
+# Create a summary table for Died and Survived groups
+summary_list <- lapply(variables_to_summarize, function(var) {
+    died_stats <- calc_descriptives(filter(icu_patients_df1_cleaned, in_hospital_death == 1), var)
+    survived_stats <- calc_descriptives(filter(icu_patients_df1_cleaned, in_hospital_death == 0), var)
+    cbind(Variable = var, Died = as.matrix(died_stats), Survived = as.matrix(survived_stats))
+})
+
+# Combine all summary tables
+summary_df <- do.call(rbind, summary_list)
+
+# Convert to data frame for better formatting
+summary_df <- data.frame(summary_df)
+
+# Print the table using kable with proper headers
+kable(summary_df, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  add_header_above(c(" " = 1, "Died" = 5, "Survived" = 5))
+
+```
+
+### Task 1 Part B: Predictive logistic model
+Multiple logistic regression models were applied for predicting in-hospital mortality
+```{R Step 3 Tests of potential variables could improve the predictive power from models for each system, include = FALSE}
+# Respiratory Function Model
+resp_model <- glm(in_hospital_death ~ PaO2_max + FiO2_max + RespRate_max, 
+                  family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(resp_model)
+
+# Coagulation & Blood Model
+coag_model <- glm(in_hospital_death ~ Platelets_max + pH_min + pH_max + Glucose_max, 
+                  family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(coag_model)
+
+# Liver Function Model
+liver_model <- glm(in_hospital_death ~ Bilirubin_max + Albumin_min + ALP_max + ALT_max + AST_max, 
+                  family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(liver_model)
+
+# Cardiovascular System Model
+cardio_model <- glm(in_hospital_death ~ HR_max + MAP_max + TroponinI_max + TroponinT_max + Lactate_max +Cholesterol_max, 
+                    family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(cardio_model)
+
+# Central Nervous System Model
+cns_model <- glm(in_hospital_death ~ GCS_min, 
+                 family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(cns_model)
+
+# Renal Function Model
+renal_model <- glm(in_hospital_death ~ Creatinine_max + Urine_min, 
+                   family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(renal_model)
+
+# Immune System Model
+immune_model <- glm(in_hospital_death ~ Temp_max + WBC_max, 
+                    family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(immune_model)
+
+# General Model
+general_model <- glm(in_hospital_death ~ Age + Gender + Weight_max + ICUType, 
+                       family = binomial(link = 'logit'), 
+                       data = icu_patients_df1_cleaned)
+summary(general_model)
+
+# Significant Maximum Levels Model (focusing on variables identified as critical)
+max_levels_model <- glm(in_hospital_death ~ Albumin_max + AST_max + Bilirubin_max + BUN_max + Creatinine_max + GCS_max + Glucose_max + HCO3_max + Lactate_max + RespRate_max + Urine_max, 
+                        family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(max_levels_model)
+
+# Significant Difference Levels Model (focusing on variables where changes were noted as important)
+diff_levels_model <- glm(in_hospital_death ~ HR_diff + Na_diff + pH_diff + Temp_diff + NISysABP_diff, 
+                         family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(diff_levels_model)
+
+# Combined Model incorporating both max and difference values of selected indicators
+combined_model <- glm(in_hospital_death ~ Albumin_max + AST_max + Bilirubin_max + BUN_max + Creatinine_max + GCS_max + Glucose_max + HCO3_max + Lactate_max + RespRate_max + Urine_max + HR_diff + Na_diff + pH_diff + Temp_diff + NISysABP_diff + Age + Gender + Weight_max, 
+                      family = binomial(link = 'logit'), data = icu_patients_df1_cleaned)
+summary(combined_model)
+```
+
+By consider significance (`p-value`) and absolute `Estimate value` of predictors, we integrating following predictors and creating intact model strive to provide a holistic view of a patient's health and potential survival odds in the ICU: 
+1. `Age`
+2. `SAPS1`
+3. `SOFA`
+4. `Albumin_max`
+5. `ALT_max`
+6. `AST_max`
+7. `Bilirubin_max`
+8. `BUN_max`
+9. `Cholesterol_max`
+10. `Creatinine_max`
+11. `GCS_max`
+12. `GCS_min`
+13. `Glucose_max`
+14. `HR_diff`
+15. `Lactate_max`
+16. `Na_diff`
+17. `NISysABP_diff`
+18. `PaO2_max`
+19. `pH_diff`
+20. `pH_min`
+21. `RespRate_max`
+22. `Temp_diff`
+23. `Urine_max`
+24. `Urine_min`
+25. `WBC_max`
+26. `ICUType`
+
+```{R task1.B_2 Building the Model}
+# Creating intact model with all significant predictors
+intact_model <- glm(in_hospital_death ~ Age + SAPS1 + SOFA + Albumin_max + ALT_max + AST_max + Bilirubin_max + BUN_max + Cholesterol_max + 
+                        Creatinine_max + GCS_max + GCS_min + Glucose_max + HR_diff + Lactate_max + Na_diff +  
+                        NISysABP_diff + PaO2_max + pH_diff + pH_min + RespRate_max + Temp_diff + Urine_max + 
+                        Urine_min + WBC_max + ICUType, 
+                    family = binomial(link = "logit"), data = icu_patients_df1_cleaned)
+#summary(intact_model)
+# Using stepwise regression to find an optimal set of predictors for intact model
+stepwise_result <- stepAIC(intact_model, direction = "both", trace = FALSE) #stepwise_result2 <- stats::step(intact_model,direction="both", trace=0)
+# Variance Inflation Factor (VIF) check
+vif_values <- vif(stepwise_result, type = 'terms')
+#print(vif_values)
+summary(stepwise_result)
+```
+
+Although it is known that SAPS1 and SOFA are calculated from some of the clinical measures, it can be seen from the correlation coefficients above that none of the predictors are highly correlated, so there is no major violation of the assumption of no multicollinearity.<br>
+
+#### Steps to Refine the Model:<br>
+- **stepAIC:** <br>
+  - method adds or removes predictors based on the AIC value in a stepwise manner to identify a model that balances model complexity with information loss. StepAIC() helped refine the model by retaining significant predictors and removing those less contributive variables.
+  - The summary of the stepwise regression model presents similar significant variables and AIC as found in the previous model.
+  - Predictors shows a relatively high p-value (>0.05),implies that it may not contribute meaningful explanatory power to the model in predicting in-hospital death.
+- **VIF values:**<br>
+  - The VIF values common thresholds are 5 or 10, below that suggests that there isn't a concerning level of multicollinearity among the main effects in the model. 
+  - High GVIF values for interaction terms are not uncommon, as these terms are products of their component variables and can inherit their collinearity.
+  - High VIF/GVIF values do not imply that a model is invalid; rather, they suggest that the precision of the coefficient estimates for the related variables may be reduced.
+- **Removing less important predictors:**<br>
+  - Drop Non-Significant (especially low abs of Estimate value) Predictors: `Glucose_max`, `Urine_min`, `Cholesterol_max`, `RespRate_max`
+  - Address Multicollinearity: `ALT_max` and `AST_max` both have high VIFs and are related liver enzymes, need redundancy.
+  - Clinical Relevance: `GCS_min` (representing the lowest Glasgow Coma Score), despite its higher p-value, are clinically relevant and known to be associated with patient outcomes, need keep.
+
+```{R task1.B_3 Refined model}
+# Then, our refined model is:
+intact_model_rf <- glm(in_hospital_death ~ Age + SAPS1 + SOFA + Albumin_max  + ALT_max + AST_max + Bilirubin_max + BUN_max  + Creatinine_max + GCS_max + GCS_min + HR_diff + Lactate_max + Na_diff + NISysABP_diff + PaO2_max + pH_diff  + Temp_diff + Urine_max + WBC_max + ICUType, 
+                       family = binomial(link = "logit"), # for binary dependent variables
+                       data = icu_patients_df1_cleaned)
+```
+**Comparing Refined Model and Intact Model with ANOVA test**:<br>
+```{R task1.B_4 Refined model comparing}
+# Comparing models with ANOVA
+anova_results <- anova(intact_model, intact_model_rf, test = "Chisq")
+print(anova_results)
+```
+
+**Residual Degrees of Freedom:** The first model (`intact_model`) has 1522 degrees of freedom, while the second model (`intact_model_rf`) has 1526. This suggests that the second model has four fewer predictors than the first.<br>
+**Residual Deviance:** The residual deviance for the first model is 1076.9 compared to 1081.5 for the second model. Lower residual deviance generally indicates a better fit to the data.<br>
+**Difference in Deviance:** The difference in deviance between the two models is -4.5503, which means that removing the four predictors (going from the first model to the second model) has increased the deviance slightly, indicating a slight loss in fit.<br>
+**Pr(>Chi):** The p-value of 0.3366 suggests that the increase in deviance (loss in fit) by removing these four predictors is statistically significant. It will be reasonable to prefer the simpler model (`intact_model_rf`) 
+<br>
+**Two-way interactions:**<br>
+```{R task1.B_5 two-way interaction model (optional: would be useful for parsimony model),eval=FALSE}
+# Creating two-way interaction models from previous models
+two_way_model <- update(intact_model_rf, . ~ .^2)
+# Dropping each two-way interaction term to test significance
+drop_interaction_result <- drop1(two_way_model, test = "Chisq")
+drop_interaction_result
+```
+
+**1.** Most interaction terms do not significantly improve the model (indicated by high p-values), which implies that the main effects of the predictors are sufficient for the prediction.<br>
+**2.** A few interaction terms do show significance (indicated by low p-values), which might suggest that the relationship between predictors and the in_hospital_death is more complex than additive. <br>
+**3.** Notably: Considering the inclusion of interaction terms, it is essential to evaluate their clinical relevance and the potential for overfitting. Models with too many interactions, especially in smaller datasets, can fit the noise in the data rather than the underlying relationships, leading to models that may not generalize well to new data.<br>
+***Inclusion of Main Effects***: Typically, when including an interaction term in a regression model, should also include the main effects of the interacting variables. This approach avoids the model misattributing the effects that should be captured by the main effects alone to the interaction term.<br>
+ `SOFA:pH_diff` (Pr(>Chi) = 2.912e-05) and `SOFA:WBC_max` (Pr(>Chi) = 0.000378) shown significant in two-way interaction model, they can be candidate predictors.
+
+<br>
+#### Re-fit Refined Model to the unimputed data frame df0
+Before refitting the model, it's important to acknowledge that several variables were excluded due to high levels of missing data. Proceeding with a direct refit results in a seemingly optimal AIC value of 229.87; however, this comes at the cost of losing 1819 observations. Such a reduction in the dataset size could impact the reliability and generalizability of the model.
+
+**Model Refit Adjustments: **<br>
+  - Exclude variables (`Albumin_max`, `ALT_max`, `AST_max`, `Bilirubin_max`, `Lactate_max`, `NISysABP_diff`, `PaO2_max`, `pH_diff`) with high levels of missing data.<br>
+  - Can further exclude variables `Na_diff` (74 missing), `Urine_max` (70 missing) and `WBC_max`(76 missing).<br>
+  - Exclude less important variables. <br>
+  - Try include `Glucose_max` and `Urine_min`, which are viable predictors not significantly affected by missing data.<br>
+  - Try introduce interaction term `SOFA:WBC_max` to explore additional predictive relationships.<br>
+```{R task1.B_6 re-fit the modified Final Model to the unimputed data frame, fig.height=4, fig.width=4.5, echo=FALSE}
+# Refit the model dropping high missing level predictor set (remove "Albumin_max" "ALT_max" "AST_max" "Bilirubin_max" "Lactate_max", "NISysABP_diff", "PaO2_max", "pH_diff")
+fmodel_df0_1 <- glm(in_hospital_death ~ Age + SAPS1 + SOFA +  BUN_max  + Creatinine_max + GCS_max + GCS_min 
+                          + HR_diff + Na_diff  + Temp_diff + Urine_max + WBC_max + ICUType, 
+                    family = binomial(link = "logit"), data = icu_patients_df0_impute)
+# Refit the model dropping high missing level and less important predictor set (remove "Na_diff" "WBC_max" "Temp_diff")
+fmodel_df0_2 <- glm(in_hospital_death ~ Age + SAPS1 + SOFA +  BUN_max  + Creatinine_max + GCS_max + GCS_min 
+                          + HR_diff  + Urine_max + ICUType, 
+                    family = binomial(link = "logit"), data = icu_patients_df0_impute)
+
+# Using stepwise regression to find an optimal set of predictors for intact model
+stepwise_df_02 <- stepAIC(fmodel_df0_2, direction = "both", trace = FALSE) 
+summary(stepwise_df_02)
+# Variance Inflation Factor (VIF) check
+vif_values <- vif(stepwise_df_02, type = 'terms')
+print(vif_values)
+
+# Residuals Plot
+plot(residuals(fmodel_df0_2, type = "deviance"), main = "Residuals Plot of fmodel_df0_2", ylab = "Deviance Residuals",
+                cex.main = 0.8,  # Smaller title font size
+                cex.lab = 0.6,   # Smaller axis labels font size
+                cex.axis = 0.6)  # Smaller axis tick labels font size
+
+# Influence Plot (Cook’s Distance)
+influencePlot(fmodel_df0_2, main="Influence Plot of fmodel_df0_2", sub="Circle size is proportional to Cook's distance",
+                cex.main = 0.7,  # Smaller title font size
+                cex.lab = 0.6,   # Smaller axis labels font size
+                cex.axis = 0.6)  # Smaller axis tick labels font size
+
+```
+**Key Observations:**<br>
+  **Significant Predictors:** Several variables are statistically significant predictors of the outcome:
+    **Age** and **SAPS1** show a positive relationship with the likelihood of in-hospital death, indicating that higher values increase the risk.
+    **SOFA** scores, reflecting organ failure severity, are also positively associated with mortality.
+    **GCS_max** negatively impacts mortality, suggesting that higher GCS scores (indicating better neurological status) are associated with lower mortality risk.
+    **Urine_max** and **GCS_min** have notable influences with their respective positive and negative coefficients indicating their importance in the model.
+    Among ICU types, only the **Cardiac Surgery Recovery Unit** shows a significant negative impact compared to the baseline ICU type, suggesting lower mortality risk in this unit.<br>
+  **Model Fit:** The model reduces the residual deviance significantly from the null model, indicating a good fit to the data.<br>
+  **AIC and Model Complexity:** The AIC of 1322.5 suggests the model is relatively efficient in balancing goodness of fit with model complexity.<br>
+  **Variance Inflation Factor (VIF):** The VIF values common thresholds are 5 or 10, below that suggests that there isn't a concerning level of multicollinearity among the main effects in the model. Most VIFs are acceptable, though GCS_min shows a 3.29 VIF indicating potential multicollinearity issues (GCS_max exist), which might affect the stability of the regression coefficients.<br>
+  **The Residuals Plot** of the adjusted refit logistic regression model shows a fairly random scatter of deviance residuals against the index, which is a good sign as it indicates that the residuals are well-behaved and do not exhibit any obvious patterns that might suggest non-linearity or other issues with the model specification. However, there is some noticeable spread in the residuals as they fluctuate around zero, especially evident in residuals beyond 1 and -1, suggesting that the model may not fully capture all the systematic variation in the data or may be experiencing issues such as outliers or influential observations.<br>
+  **The Influence Plot** provides a visual assessment of the influence of individual data points on the regression estimates. This plot illustrates both the leverage (hat-values) and the impact of each point on the regression coefficients through Cook's distance. In this plot, we can see a few points with notably high Cook’s distances (points 206, 1118 and 1175, notably), indicating they are influential points and potentially outliers. These points could be distorting the regression results and might warrant further investigation. The plot also highlights several other points with moderate influence on the model.
+
+**Influential point check**<br>
+```{R task1.B_7 influential_point check, echo=FALSE}
+analyze_influential_points <- function(data, indices) {
+  # Specify the columns of interest
+  columns_of_interest <- c("Age", "SAPS1", "SOFA", "BUN_max", "Creatinine_max", "GCS_max", "GCS_min", "HR_diff", "Urine_max")
+
+  # Calculate summary statistics for the entire dataset for comparison
+  summary_stats <- sapply(data[, columns_of_interest, drop = FALSE], function(x) {
+    c(Min = min(x, na.rm = TRUE), Max = max(x, na.rm = TRUE))
+  })
+
+  # Define a threshold for "near" max or min (e.g., within 5%)
+  threshold <- 0.05
+
+  # Function to check if values are at or near the min/max
+  check_near_min_max <- function(val, min, max) {
+    list(AtMin = val == min || abs(val - min) <= threshold * abs(min),
+         AtMax = val == max || abs(val - max) <= threshold * abs(max))
+  }
+
+  # Initialize a list to store results
+  results <- list()
+
+  # Analyze each point
+  for (index in indices) {
+    point_data <- data[index, c(columns_of_interest, "in_hospital_death"), drop = FALSE]
+    survival_status <- ifelse(point_data["in_hospital_death"] == 1, "Died in hospital", "Survivor")
+    individual_results <- c()
+
+    for (var in columns_of_interest) {
+      val <- point_data[[var]]
+      min_max_check <- check_near_min_max(val, summary_stats["Min", var], summary_stats["Max", var])
+      if (min_max_check$AtMin || min_max_check$AtMax) {
+        individual_results <- c(individual_results, sprintf("Index %d, %s: %f %s", 
+                                                            index, var, val, 
+                                                            ifelse(min_max_check$AtMin, "near/at Min", "near/at Max")))
+      }
+    }
+    
+    if (length(individual_results) > 0) {
+      individual_results <- c(individual_results, sprintf("Index %d, %s", index, survival_status))
+      results[[length(results) + 1]] <- individual_results
+    }
+  }
+
+  # Print results
+  if (length(results) > 0) {
+    cat("Significant Values at or near Min/Max:\n")
+    for (result in results) {
+      for (line in result) {
+        cat(line, "\n")
+      }
+    }
+  } else {
+    cat("No significant values at or near Min/Max found for specified indices.\n")
+  }
+}
+
+# Example usage with specified indices
+indices <- c(206, 1118, 1175)  # indices of influential points
+analyze_influential_points(icu_patients_df1_cleaned, indices)
+
+```
+For example, after check influential_point 1175, we find that:<br>
+  - **BUN_max:**: Blood urea nitrogen measures the amount of nitrogen in the blood that comes from urea, a waste product processed by the kidneys, 197 is maximum in whole data.<br>
+  - **Creatinine_max:** A maximum creatinine level of 22 is maximum in whole data.<br>
+  - **GCS_min:** The minimum Glasgow Coma Scale (GCS) score of 3 is the lowest possible score, indicating severe brain injury or deep unconsciousness.<br>
+  - **Urine_min:** no volume of urine output.<br>
+  - **In-hospital death (0):** Despite severe kidney dysfunction, deep unconsciousness, and possible respiratory distress, the patient survived the hospital stay.This is kind of counterintuitive by consider the clinical parameters.
+It's might be essential to review the medical records for such patients to understand the context better, validate the data accuracy, and decide on the inclusion in the analysis.
+<br>
+**Checking and Aligning Data**<br>
+```{R Checking and Aligning Data, include = FALSE}
+# Ensure the data frame used in modeling has no missing values
+icu_patients_df0_impute <- na.omit(icu_patients_df0_impute)
+
+# Fit the model
+fmodel_df0_1 <- glm(in_hospital_death ~ Age + SAPS1 + SOFA + BUN_max + Creatinine_max + GCS_max + GCS_min + HR_diff + Urine_max + ICUType, 
+                    family = binomial(link = "logit"), data = icu_patients_df0_impute)
+
+# Make predictions
+pred0_fmodel <- predict(fmodel_df0_1, type = "response")
+
+# Check if the lengths match
+if(length(pred0_fmodel) == length(icu_patients_df0_impute$in_hospital_death)) {
+  print("Lengths match, safe to proceed")
+} else {
+  print("Mismatch in lengths, check data")
+}
+
+# Proceed with prediction object creation
+pred0_obj_fmodel <- prediction(pred0_fmodel, icu_patients_df0_impute$in_hospital_death)
+
+
+```
+
+```{R task1.B_11 final model relevant diagnostic statistics and/or charts, fig.height=5, fig.width=5, echo=FALSE}
+# Using dplyr to filter out cases where the specified variables are NA
+#valid_data0 <- icu_patients_df0 %>% filter(!is.na(SAPS1) & !is.na(GCS_min) & !is.na(Creatinine_max))
+
+# Logistic regression to see the effect of SAPS1 and SOFA scores on in-hospital death
+model0_saps1 <- glm(in_hospital_death ~ SAPS1, data = icu_patients_df0_impute, family = binomial)
+model0_sofa <- glm(in_hospital_death ~ SOFA, data = icu_patients_df0_impute, family = binomial)
+fmodel_df0_1 <- glm(in_hospital_death ~ Age + SAPS1 + SOFA +  BUN_max  + Creatinine_max + GCS_max + GCS_min 
+                          + HR_diff + Na_diff  + Temp_diff + Urine_max + WBC_max + ICUType, 
+                    family = binomial(link = "logit"), data = icu_patients_df0_impute)
+# Refit the model which dropping high missing level and less important predictor set (remove "Na_diff" "WBC_max" "Temp_diff")
+fmodel_df0_2 <- glm(in_hospital_death ~ Age + SAPS1 + SOFA +  BUN_max  + Creatinine_max + GCS_max + GCS_min 
+                          + HR_diff  + Urine_max + ICUType, 
+                    family = binomial(link = "logit"), data = icu_patients_df0_impute)
+# Predicted probabilities for the models
+pred0_saps1 <- predict(model0_saps1, type = "response")
+pred0_sofa <- predict(model0_sofa, type = "response")
+pred0_fmodel <- predict(fmodel_df0_1, type = "response")
+pred0_fmodel_TW <- predict(fmodel_df0_2, type = "response")
+
+# Calculate Brier scores
+Brier_model0_saps1 <- mean((pred0_saps1 - icu_patients_df0_impute$in_hospital_death)^2)
+Brier_model0_sofa <- mean((pred0_sofa - icu_patients_df0_impute$in_hospital_death)^2)
+Brier_fmodel_df0_1 <- mean((pred0_fmodel - icu_patients_df0_impute$in_hospital_death)^2)
+Brier_fmodel_df0_3 <- mean((pred0_fmodel_TW - icu_patients_df0_impute$in_hospital_death)^2)
+
+# Print Brier scores
+cat("Brier score for SAPS1 Model: ", Brier_model0_saps1, "\n")
+cat("Brier score for SOFA Model: ", Brier_model0_sofa, "\n")
+cat("Brier score for Final Model: ", Brier_fmodel_df0_1, "\n")
+cat("Brier score for Final Model with interaction terms: ", Brier_fmodel_df0_3, "\n")
+
+# Create prediction objects for ROC analysis
+pred0_obj_saps1 <- prediction(pred0_saps1, icu_patients_df0_impute$in_hospital_death)
+pred0_obj_sofa <- prediction(pred0_sofa, icu_patients_df0_impute$in_hospital_death)
+pred0_obj_fmodel <- prediction(pred0_fmodel, icu_patients_df0_impute$in_hospital_death)
+pred0_obj_fmodel_TW <- prediction(pred0_fmodel_TW, icu_patients_df0_impute$in_hospital_death)
+
+# Create performance objects for ROC analysis
+perf0_saps1 <- performance(pred0_obj_saps1, "tpr", "fpr")
+perf0_sofa <- performance(pred0_obj_sofa, "tpr", "fpr")
+perf0_fmodel <- performance(pred0_obj_fmodel, "tpr", "fpr")
+perf0_fmodel_TW <- performance(pred0_obj_fmodel_TW, "tpr", "fpr")
+
+
+# Plot ROC curves
+plot(perf0_saps1, col = "plum", main = "ROC Curves for SAPS1, SOFA, Re-fit Model and Final Model")
+plot(perf0_sofa, col = "skyblue", add = TRUE)
+plot(perf0_fmodel, col = "orange", add = TRUE)
+plot(perf0_fmodel_TW, col = "lightgreen", add = TRUE)
+abline(a = 0, b = 1, lty = 2)
+
+# Add a legend
+legend("bottomright", legend = c("SAPS1 Model", "SOFA Model", "Re-fit Model", "Final Model"), col = c("plum", "skyblue", "orange", "lightgreen"), lwd = 2)
+
+# Calculate AUC for SAPS1 model
+auc0_saps1 <- performance(pred0_obj_saps1, measure = "auc")
+auc0_saps1_value <- auc0_saps1@y.values[[1]]
+cat("AUC for SAPS1 Model:", auc0_saps1_value, "\n")
+
+# Calculate AUC for SOFA model
+auc0_sofa <- performance(pred0_obj_sofa, measure = "auc")
+auc0_sofa_value <- auc0_sofa@y.values[[1]]
+cat("AUC for SOFA Model:", auc0_sofa_value, "\n")
+
+
+# Calculate AUC for Final model
+auc0_fmodel <- performance(pred0_obj_fmodel, measure = "auc")
+auc0_fmodel_value <- auc0_fmodel@y.values[[1]]
+cat("AUC for Re-fit Model:", auc0_fmodel_value, "\n")
+
+# Calculate AUC for Final model with interaction terms
+auc0_fmodel_TW <- performance(pred0_obj_fmodel_TW, measure = "auc")
+auc0_fmodel_TW_value <- auc0_fmodel_TW@y.values[[1]]
+cat("AUC for Final Model:", auc0_fmodel_TW_value, "\n")
+
+```
+**Analysis of ROC Curves and Model Performance:**<br>
+**Brier Score**: Lower Brier scores indicate better model calibration, where the predicted probabilities are closer to the actual outcomes. Both Re-fit Model and Final Model show better performance than the simpler SAPS1 and SOFA models, with the Re-fit model (have more ) slightly outperforming Final Model. <br>
+**AUC**: Higher AUC values indicate better discriminative ability, i.e., the model's ability to distinguish between patients who survived and those who did not. Similar to the Brier scores, Both Re-fit Model and Final Model show superior performance. <br>
+**ROC Curves**: The Receiver Operating Characteristic (ROC) curves show distinct performances in predicting in-hospital death. While SAPS1 and SOFA models are simpler and less computationally intensive, do not perform as well as the Re-fit Model and Final Model, which justifies the inclusion of additional predictors did improve model accuracy.<br>
+The introduction of extra predictors does not improve the Re-fit model Brier Score and AUC significantly, indicating that while these terms add complexity, they do not substantially enhance the model's ability to discriminate between outcomes.
+
+### Task 2 Part A: Exploratory data analysis
+```{r task2.A_1 EDA1, fig.height=4, fig.width=4.4, echo=FALSE}
+# Convert days to years for the survival analysis
+icu_patients_df1_cleaned$Years <- icu_patients_df1_cleaned$Days / 365.25
+# Filter out the maximum 'Days' value for a clearer histogram via focus on deceased patients
+# **In data instraction "ICU stays of less than 48 hours have been excluded.", But I still see the 1 and 2 days value in `Days` variable.
+filtered_2days_data <- icu_patients_df1_cleaned %>% filter(Days >= 2)
+filtered_days_data <- icu_patients_df1_cleaned %>% filter(Days >= 2 & Days < 2408)
+#all(icu_patients_df1_cleaned$Days[icu_patients_df1_cleaned$Status == 'FALSE'] == 2408) #Return TRUE if all entries in icu_patients_df1 where the Status is FALSE have the Days value of 2408.
+
+# Histogram of survival time with density line
+ggplot(filtered_days_data, aes(x = Days)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10, fill = "skyblue", color = "black", alpha = 0.7) +
+  geom_density(color = "blue") +
+  labs(title = "Distribution of Survival Time (Days) of Deceased Patients",
+       x = "Survival Time (Days)",
+       y = "Density") +
+  theme_minimal()
+
+# Histogram of patient ages with density line
+# Transform the 'Status' logical variable into a factor with levels 'Survived' and 'Died'
+icu_patients_df1_cleaned$Survival_Status <- factor(icu_patients_df1_cleaned$Status, levels = c(FALSE, TRUE), labels = c("Survived", "Died"))
+
+ggplot(icu_patients_df1_cleaned, aes(x = Age, y = after_stat(density))) +
+  geom_histogram(aes(fill = Survival_Status), position = "identity", binwidth = 3, alpha = 0.5, na.rm = TRUE) +
+  scale_fill_brewer(palette = "Set1", name = "Survival Status") +
+  geom_density(aes(color = Survival_Status), linewidth = 1, na.rm = TRUE) +
+  labs(title = "Distribution of Age by Survival Status",
+       x = "Age",
+       y = "Density") +
+  theme_minimal() +
+  scale_color_brewer(palette = "Set1", name = "Survival Status") +
+  theme(legend.position = "bottom", # Moving the legend to the bottom
+        plot.title = element_text(size = 14), # Smaller title font size
+        axis.title = element_text(size = 12)) # Smaller axis title font size
+
+# Survival status frequency and proportion table
+status_table <- table(icu_patients_df1_cleaned$Status)
+status_prop <- prop.table(status_table) * 100  # Convert to percentages
+status_df <- data.frame(
+  Status = c("Survived", "Deceased"),
+  Frequency = as.integer(status_table),
+  Proportion = sprintf("%.2f%%", status_prop)
+)
+kable(status_df, caption = "Survival Status of Patients", row.names = FALSE)
+
+
+
+```
+
+**Distribution of Survival Time (Days) of Deceased Patients**:<br>
+  - A heavy concentration of data at the lower end of the survival time spectrum, illustrateing that most deceased patients have a very short survival time post-admission. This indicates that many deaths occur relatively soon after hospital admission, which might reflect the severity of illness at the time of admission. It also underscores the urgency of effective early intervention in critical care settings, particularly for older patients.<br>
+  - If including values at 2408 days, the presence of a sharp peak at the far right end could indicate right-censoring at a study endpoint or a standard follow-up period.
+
+**Distribution of Age of All Patients**:<br>
+  - **The distribution of ages among patients who survived** (represented by the red bars and density curve) spans a broad range, and there’s a notable peak around the middle age range, suggesting that younger patients have a higher survival rate.<br>
+  - **The distribution of ages among patients who died** (depicted by the blue bars and density curve) also covers a wide age range but with a peak at an older age, indicating older patients possibly having a higher risk of mortality.<br>
+  - **Elderly Vulnerability** - The right skew in the distribution of patients who died — extending further into older ages — emphasizes that elderly patients are particularly vulnerable and more likely to die. This trend might be due to the higher prevalence of comorbidities and lower physiological reserves that come with aging.<br>
+  - **Overlap and Implications** - There's a significant overlap in the age distributions around the middle age range (around 50 to 70 years), indicating that while age is a factor, other variables also play critical roles in survival outcomes. Medical interventions and health conditions could significantly impact outcomes in this age range.
+
+
+```{r task2.A_1 EDA2 MK, fig.height=6, fig.width=12, echo=FALSE}
+# Creating the survival object
+surv_obj <- Surv(time = icu_patients_df1_cleaned$Days, event = icu_patients_df1_cleaned$Status)
+surv_obj_years <- Surv(time = icu_patients_df1_cleaned$Years, event = icu_patients_df1_cleaned$Status)
+
+# Fitting the Kaplan-Meier survival model
+surv_fit <- survfit(surv_obj ~ 1)  # `~ 1` for an overall curve
+surv_fit_years <- survfit(surv_obj_years ~ 1, data = icu_patients_df1_cleaned)
+surv_fit_ICUtype <- survfit(surv_obj_years ~ ICUType, data = icu_patients_df1_cleaned)
+
+# check the factor levels of the grouping variable (ICU type)
+#levels(icu_patients_df1_cleaned$ICUType)
+
+# Plot the overall Kaplan-Meier survival curve
+km_plot <- ggsurvplot(
+  surv_fit_years, 
+  data = icu_patients_df1_cleaned,
+  conf.int = TRUE,   # Display the confidence interval
+  risk.table = TRUE, # Display the risk table
+  xlab = "Time (years)", 
+  ylab = "Proportion Surviving", 
+  title = "Kaplan-Meier Estimate of Survival Function", 
+  ylim = c(0.5, 1),
+  surv.median.line = "hv",  # Add a horizontal line at the median
+  ggtheme = theme_minimal() # Use a minimal theme for a cleaner look
+)
+
+# Kaplan Meier curve by ICU types
+icu_type_mk_plot <- ggsurvplot(
+  surv_fit_ICUtype, 
+  data = icu_patients_df1_cleaned, 
+  conf.int = TRUE,  
+  censor.size = 2, 
+  risk.table = FALSE, 
+  legend.labs = c("Coronary Care Unit", "Cardiac Surgery Recovery Unit", "Medical ICU", "Surgical ICU"),
+  ylim = c(0.4, 1.0)
+) +
+  xlab("Survival time (years)") + 
+  ylab("Proportion surviving") + 
+  ggtitle("Kaplan-Meier survival curve over time by ICU type")
+
+# Combine plots using gridExtra
+combined_plot <- grid.arrange(km_plot$plot, icu_type_mk_plot$plot, ncol = 2, widths = c(1, 1))
+
+```
+**Overall Survival Analysis (Left plot)**: The left MK curve shows the overall survival function for all patients.  It depicts a sharp decline in survival probability within the initial period, followed by a gradual decrease over time. The "Number at risk" table below the curve indicates the number of individuals still being tracked at each time point, which decreases as time progresses due to events (deaths).<br>
+**Survival Analysis by ICU Type (Right plot)**: The right MK curves stratify patients by ICU type, illustrating the survival probabilities across different units: Coronary Care Unit (CCU), Cardiac Surgery Recovery Unit (CSRU), Medical ICU, and Surgical ICU. Notably, the survival curves diverge significantly among the types, with CSRU showing higher survival probabilities but Medical ICU and CCU displaying lower probabilities throughout the observed period.
+
+
+```{r task2.A_1 EDA3, include = FALSE}
+#assess univariate and multivariate model hazard ratios using finalfit() function for numeric variables, stratified by age
+dependent_os  <- "Surv(Days, Status)"
+explanatory   <- c("strata(Age)", "SAPS1", "SOFA", "Albumin_max", "AST_max", "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "Glucose_max", "HCO3_max", "HR_diff", "Lactate_max", "Na_diff", "pH_diff", "RespRate_max", "Temp_diff", "Urine_max", "NISysABP_diff")
+
+cox_num_vars <- icu_patients_df1 %>% 
+    finalfit(dependent_os, explanatory, add_dependent_label = FALSE) 
+
+cox_num_vars[-2]%>% 
+    rename("Overall survival" = label) %>% 
+    rename("Mean (SD)" = all)  %>%  kbl() %>%   kable_styling()
+```
+
+
+### Task 2 Part B: Explanatory survival model
+**Univariable Cox Proportional Hazards Model**<br>
+```{r task2.B_1 Univariable Cox Proportional Hazards Model}
+# In data instraction "ICU stays of less than 48 hours have been excluded.", But I still see the 1 and 2 days value in `Days` variable.
+#filtered_2days_data <- icu_patients_df1_cleaned %>% filter(Days >= 2) 
+cox_model_age <- coxph(Surv(Days, Status) ~ Age, data = icu_patients_df1_cleaned) # not sure if we should exclude < 2 days data as "ICU stays of less than 48 hours have been excluded." data = filtered_2days_data
+summary(cox_model_age)
+
+```
+**Coefficient (Age):** The coefficients in model are positive indicating that with additional year of age, risk of the event (death) increased.<br>
+**Hazard Ratio (exp(coef)):** Each additional year of age increases the risk of death by approximately 3.5%. <br>
+**Concordance:** It measures the model's predictive accuracy 0.646 suggest a moderate predictive ability. <br>
+**Statistical Tests:** All three statistical tests (Likelihood ratio test, Wald test, and Score (logrank) test) confirm the significant relationship between age and survival in both models.
+
+
+```{r task2.B_2 Multivariable Cox Model, include = FALSE}
+# Fit initial Cox model with Final Model predictor
+initial_cox_model <- coxph(Surv(Days, Status) ~ Age + SAPS1 + SOFA +  BUN_max  + Creatinine_max + GCS_max + GCS_min 
+                          + HR_diff  + Urine_max + ICUType,
+                          data = icu_patients_df1_cleaned)
+summary(initial_cox_model)
+```
+
+**Diagnostic plots and Stepwise Cox Model**<br>
+```{r task2.B_3 diagnostic plots and Stepwise Cox Model, echo=FALSE, message=FALSE, warning=FALSE, fig.show='hold',fig.height=3, fig.width=3}
+# Check proportional hazards assumption
+cox.zph_res <- cox.zph(initial_cox_model)
+#print(cox.zph_res)
+plot(cox.zph_res) #diagnostic plots
+
+# Perform stepwise selection based on AIC
+stepwise_cox_model <- stepAIC(initial_cox_model, direction = "both")
+kable(summary(stepwise_cox_model)$coefficients, caption = "Summary of Stepwise Cox Model")
+
+```
+
+The `cox.zph` function in R tests the proportional hazards assumption of a Cox regression model.<br>
+1. **Plot Interpretation**:<br>
+  - The x-axis represents the transformed time, and the y-axis shows the scaled Schoenfeld residuals.<br>
+  - A horizontal line at zero (sometimes shown with confidence bands) is the reference line indicating no deviation from proportionality.<br>
+  - If the points form a random pattern around the horizontal line, it suggests that the proportional hazards assumption holds for that variable.<br>
+  - Systematic patterns, trends, or a non-random dispersion suggest a violation of the assumption.<br>
+2. **General Observation**:<br>
+  - Age, GCS max, SOFAF and ICUType plots show some pattern or deviation from the zero line, particularly for Age and ICUType, which suggests potential violations of the proportional hazards assumption, indicating the effect of these variables on the hazard changes over time.<br>
+3. **The proportional hazards assumption test**: performed using the scaled Schoenfeld residuals, which should be approximately independent of time if the proportional hazards assumption holds.<br>
+  - chisq: This column shows the chi-square statistic for the test of the null hypothesis that there is no time dependence of the covariate's effect. A higher value indicates more evidence against the null hypothesis.<br>
+  - df: This column indicates the degrees of freedom associated with the chi-square test for each covariate. Most individual tests will have 1 degree of freedom unless a covariate is categorical with more than two levels (like ICUType).<br>
+  - p: This column provides the p-value associated with the chi-square test. A small p-value (typically less than 0.05) suggests that the effect of the covariate is not proportional over time, indicating a violation of the proportional hazards assumption. For covariates with significant tests (low p-values), consider modeling them with time-varying coefficients or including interaction terms with time to account for their changing effects.<br>
+4. **Stepwise Cox model interpretation**:<br>
+  - coef (Coefficient): This represents the estimated effect of each covariate on the hazard rate, assuming all other covariates are held constant. A positive coefficient increases the hazard rate, a negative coefficient reduces the hazard rate.<br>
+  - exp(coef) (Hazard Ratio): The factor by which the hazard rate is multiplied for a one-unit increase in the covariate.Above 1 indicates increased risk; below 1 indicates decreased risk.<br>
+  - se(coef) (Standard Error): The standard deviation of the estimated coefficient, indicating the precision of the estimate. Smaller values suggest more precise estimates.<br>
+  - Z-score: The ratio of the coefficient to its standard error. It's used to test the null hypothesis that the coefficient is zero (no effect).<br>
+  - Pr(>|z|) (P-value): This indicates the probability of observing the given result, if the null hypothesis (that the coefficient is zero) is true. A small p-value less than 0.05 suggests that the effect is statistically significant.<br>
+5.**Model Coefficients and Hazard Ratios: (Stepwise) Cox model summary**:
+- **Age**: For each additional year, the hazard of death increases by about 2.78%. This is a common finding in clinical settings where older age is often associated with higher mortality risks.
+- **SAPS1 (Simplified Acute Physiology Score)**: Each point increase in SAPS1 is associated with a 5.42% increase in the hazard of death. This indicates that higher severity scores are linked to worse outcomes, as expected.
+- **SOFA (Sequential Organ Failure Assessment)**: Each point increase in the SOFA score increases the hazard by 4.79%. This score, which assesses the extent of a patient's organ function or rate of failure, helps in predicting the likelihood of mortality, with higher scores indicating higher risk.
+- **BUN_max (Maximum Blood Urea Nitrogen)**: For each unit increase in BUN, the hazard of death increases by 0.83%. High BUN levels can indicate kidney dysfunction, which is a critical factor in patient outcomes.
+- **Creatinine_max**: Surprisingly, higher maximum creatinine levels are associated with a slightly reduced hazard of death (3.8% decrease per unit increase), although this predictor is not statistically significant (p = 0.153).
+- **GCS_max (Maximum Glasgow Coma Scale)**: Each point increase in the maximum GCS, which measures consciousness level, is associated with a 8.44% decrease in the hazard of death. Higher GCS scores, indicating better neurological function, are associated with better outcomes.
+- **GCS_min (Minimum Glasgow Coma Scale)**: Conversely, each point increase in the minimum GCS score reduces the hazard by 6.20%, emphasizing the importance of neurological status in survival outcomes.
+- **Urine_max**: Each unit increase in maximum urine output slightly reduces the hazard by 0.03%, reflecting better kidney function and fluid balance.
+- **ICUType**: The type of ICU also plays a significant role:
+    - **Cardiac Surgery Recovery Unit**: Being in this unit reduces the hazard of death by 52.91% compared to the baseline ICU type, indicating potentially better treatment post-cardiac surgery.
+    - **Medical ICU**: There is an increase in hazard by 8.25%, but this is not statistically significant.
+    - **Surgical ICU**: There's a slight reduction in hazard (15.64%), but again, it's not significant.
+
+
+**Assess Model Assumptions**<br>
+```{r task2.B_4 Assess Model Assumptions, fig.height=7, fig.width=10}
+test_proportional_hazards <- cox.zph(stepwise_cox_model) # Assessing proportional hazards assumption
+print(test_proportional_hazards) # Check the proportional hazards assumption
+#plot(test_proportional_hazards) # Plotting the Schoenfeld residuals to visually inspect any trends over time
+ggcoxzph(test_proportional_hazards) # the scaled Schoenfeld residuals along with a smooth curve
+```
+<br>
+The results and the plots from the Schoenfeld residuals test indicate **significant concerns** regarding the proportional hazards assumption for several variables in your Cox regression model.<br>
+  - `SAPS1`, `SOFA`, `GCS_max`, `GCS_min`, and `ICUType` show significant p-values (p < 0.05), suggesting that the effect of these covariates on the hazard changes over time. This violates the proportional hazards assumption. <br>
+  - `Age`, `BUN_max` and `Creatinine_max` are the only three have p-values greater than 0.05, suggesting they meet the proportional hazards assumption, means effect on the hazard is consistent over time. However, `Age` and `BUN_max` have p-values close to 0.1, indicating a borderline case where reviewing stability over time still needs to be considered.<br>
+  - In addition, the `global` test has a p-value of 4.9e-09, indicating strong evidence against the proportional hazards assumption for the model as a whole. <br> 
+  - For variables that violate the assumption, stratification or using time-dependent covariates in the model is the method to handle the non-proportionality.Alternatively, interactions between these variables and time could be modeled to better fit the data. <br> 
+  - In addition, based on summary of both multivariable Cox Model and stepwise cox model, variable `HR_diff` can be dropped.
+<br>
+**Diagnostic and Goodness-of-Fit**<br>
+```{r task2.B_5 Diagnostic and Goodness-of-Fit, echo=FALSE, message=FALSE, warning=FALSE, fig.show='hold',fig.height=4, fig.width=4}
+# Plot diagnostics
+# Compute Schoenfeld residuals
+schoenfeld_res <- residuals(stepwise_cox_model, type = "schoenfeld")
+
+# Compute Martingale residuals
+martingale_res <- residuals(stepwise_cox_model, type = "martingale")
+
+# Compute deviance residuals
+deviance_res <- residuals(stepwise_cox_model, type = "deviance")
+
+# Compute score residuals
+score_res <- residuals(stepwise_cox_model, type = "score")
+
+# Plotting Schoenfeld residuals
+plot(schoenfeld_res, main = "Schoenfeld Residuals")
+
+# Plotting Martingale residuals
+plot(martingale_res, main = "Martingale Residuals")
+
+# Plotting Deviance residuals
+plot(deviance_res, main = "Deviance Residuals")
+
+# Plotting Score residuals
+plot(score_res, main = "Score Residuals")
+
+```
+<br>
+**1. Schoenfeld Residuals**:<br>
+   - Calculates Schoenfeld residuals, which are used to check the proportional hazards assumption of a Cox model. Each residual represents the contribution of an individual covariate to the hazard at each event time.<br>
+   - Plots these residuals against time., if the residuals display any systematic pattern over time, it suggests a violation of the proportional hazards assumption.<br>
+   - In this case, residuals lack of clear patterns would suggest that the proportional hazards assumption holds for age.<br>
+**2. Martingale Residuals**:<br>
+   - Computes Martingale residuals, which represent the difference between the observed number of events and the expected number under the model, for each individual.<br>
+   - Detecting non-linear effects of covariates and potential outliers. Ideally, residuals should be randomly scattered around zero without clear patterns.<br>
+   - In deviance residuals plot, a random scatter indicates good model fit, while patterns or trends could suggest model inadequacies.<br>
+**3. Deviance Residuals**:<br>
+   - Calculates deviance residuals, providing a measure of how well the model predicts each observation.<br>
+   - Like Martingale residuals, these should ideally scatter randomly around zero, aiding in identifying poorly predicted observations.<br>
+   - A random scatter indicates good model fit.<br>
+**4. Score Residuals**:<br>
+   - Computes score residuals, assessing the contribution of each observation to the overall model fit.<br>
+   - Identify influential cases where an individual observation markedly affects the coefficient estimates.<br>
+   - Dense clustering without extreme outliers is ideal.<br>
+
+```{r task2.B_6 Fit Cox model to df0 data, eval=FALSE, results='hide', message=FALSE, warning=FALSE}
+# Fit initial Cox model to df0 data
+initial_cox_model_df0 <- coxph(Surv(Days, Status) ~ Age + SAPS1 + SOFA +  BUN_max  + Creatinine_max + GCS_max + GCS_min + Urine_max + ICUType,
+                          data = icu_patients_df0_cleaned)
+summary(initial_cox_model_df0)
+# Fit proportional hazards assumption violate Cox model to df0 data
+ph_violate_cox_model_df0 <- coxph(Surv(Days, Status) ~ SAPS1 + SOFA + GCS_max + GCS_min + Urine_max + ICUType,
+                          data = icu_patients_df0_cleaned)
+summary(ph_violate_cox_model_df0)
+# Fit proportional hazards assumption accept Cox model to df0 data
+ph_accept_cox_model_df0 <- coxph(Surv(Days, Status) ~ Age + BUN_max + Creatinine_max,
+                          data = icu_patients_df0_cleaned)
+summary(ph_accept_cox_model_df0)
+# Check proportional hazards assumption
+cox.zph_res_df0 <- cox.zph(initial_cox_model_df0)
+print(cox.zph_res_df0)
+plot(cox.zph_res_df0) #diagnostic plots
+
+#stepwise_cox_model_df0 <- stepAIC(initial_cox_model_df0, direction = "both") # Perform stepwise selection based on AIC 
+#kable(summary(stepwise_cox_model_df0)$coefficients, caption = "Summary of Stepwise Cox Model")
+
+```
+**Please Note**: When Perform stepwise selection on re-fit Cox model, the error "number of rows in use has changed: remove missing values?" occurred, as the data used for the Cox model fitting contains missing values.
+
+<br>
+**Bootstrapping to validate the model:**<br>
+```{r task2.B_7 Model Validation, echo=FALSE, message=FALSE, warning=FALSE, fig.show='hold',fig.height=4.5, fig.width=10}
+# bootstrapping to validate the model (fits a Cox proportional hazards model to a subset of data)
+coxph_boot <- function(data, indices) {
+  d <- data[indices,] # allows boot to select sample
+  fit <- coxph(Surv(Days, Status) ~ Age + SAPS1 + SOFA + BUN_max  + Creatinine_max + GCS_max + GCS_min + Urine_max + ICUType, data = d)
+  return(coef(fit)) #returns the coefficients of the fitted model
+}
+
+# Bootstrapping with 1000 resamples
+results_boot <- boot(icu_patients_df0_cleaned, coxph_boot, R=1000)
+plot(results_boot)
+
+```
+
+  - **Histogram of t**: represents the distribution of the bootstrapped estimates for one of the coefficients from the Cox proportional hazards model. It helps visualize the variability and bias of the estimate.  The variable `t` on the x-axis represents the coefficient values obtained in each bootstrap iteration. In here, the distribution looks symmetric about the mean, suggesting that the bootstrap samples do not show much bias.
+  - **Quantile-Quantile (QQ) plot**: This plot compares the quantiles of the bootstrap estimates against the quantiles of a standard normal distribution. The points lie close to the diagonal line, which implies that the distribution of the bootstrap estimates is approximately normal.
+
+
+####Analysis of Survival Time by Time Group:**<br>
+```{r  task2.B_8 , eval=FALSE }
+# Splitting the dataset into 'Early' and 'Late' groups based on a 1200-day threshold (close to median)
+icu_patients_df0_impute$time_group <- ifelse(icu_patients_df0_impute$Days <= 1200, "Early", "Late")
+# Fitting Cox proportional hazards models separately for each time group to investigate the effects of clinical variables on survival
+cox_model_early <- coxph(Surv(Days, Status) ~ Age + SAPS1 + SOFA + BUN_max + Creatinine_max + GCS_max + GCS_min + Urine_max + ICUType + strata(time_group),
+                         data = subset(icu_patients_df0_impute, time_group == "Early"), ties = "breslow")
+cox_model_late <- coxph(Surv(Days, Status) ~ Age + SAPS1 + SOFA + BUN_max + Creatinine_max + GCS_max + GCS_min + Urine_max + ICUType + strata(time_group),
+                        data = subset(icu_patients_df0_impute, time_group == "Late"), ties = "breslow")
+summary(cox_model_early)
+summary(cox_model_late)
+# Additionally, fitting a model with time interactions to analyze how predictor effects change over time
+cox_model_interaction <- coxph(Surv(Days, Status) ~ Age + SAPS1 * time_group + SOFA * time_group + BUN_max + Creatinine_max + GCS_max * time_group + GCS_min * time_group + Urine_max + ICUType * time_group,
+                               data = icu_patients_df0_impute, ties = "breslow")
+summary(cox_model_interaction) # Check the model summary
+
+```
+
+
+**Early Phase:** <br>
+- `SAPS1`, `SOFA`, `BUN_max`, `GCS_max`, `GCS_min`, and `ICUType Cardiac Surgery Recovery Unit` are significant predictors of the hazard, with `SAPS1` and `SOFA` showing a positive relationship, indicating higher scores are associated with a higher hazard of death or event.<br>
+- `Age` and `Creatinine_max` do not show significant effects during this early phase.<br>
+- The `ICUType Cardiac Surgery Recovery Unit` shows a notable decrease in hazard (HR < 1), suggesting a lower risk compared to the baseline ICU type.<br>
+**Late Phase:**<br>
+- `Age` is the only significant predictor with a positive coefficient, suggesting that as age increases, the risk of death or an event increases in the later phase of follow-up.<br>
+- Other covariates, including `SAPS1`, `SOFA`, and markers such as `BUN_max` and `Creatinine_max`, are not significant, which might suggest that their impact is more pronounced early in the treatment or their effects have stabilized in the late phase.<br>
+Combined Analysis with Time Interaction: Interactions between the covariates and the time variable (time_group) can also be added to a single model to assess if the effect of these covariates changes significantly over the different time periods. <br>
+- The interaction terms generally are not significant, indicating that the proportional hazards assumption might still hold when splitting the model into two time periods without needing to include interactions explicitly.<br>
+- The main effects of `SAPS1`, `SOFA`, `GCS_max`, and `GCS_min` remain significant, but their hazard ratios shift slightly, likely due to adjusting for the split in follow-up time.<br>
+
+```{r  task2.B_8, include = FALSE}
+# Assuming icu_patients_df0_impute is already filtered and Days and Status are correctly formatted
+icu_patients_df0_impute$Days <- as.numeric(icu_patients_df0_impute$Days)
+icu_patients_df0_impute$Status <- as.logical(icu_patients_df0_impute$Status)  # Make sure Status is a logical
+
+# Create the survival object
+surv_obj <- Surv(time = icu_patients_df0_impute$Days, event = icu_patients_df0_impute$Status)
+
+# Fit a Cox model
+cox_model <- coxph(surv_obj ~ Age + SAPS1 + SOFA + BUN_max + Creatinine_max + GCS_max + GCS_min + Urine_max + ICUType, 
+                   data = icu_patients_df0_impute)
+#summary(cox_model)
+
+# Fit Weibull model using flexsurv package
+weibull_model <- flexsurvreg(Surv(Days, Status) ~ Age + SAPS1 + SOFA, data = icu_patients_df0_impute, dist = "weibull")
+
+#print(summary(weibull_model))
+
+# Fit Gompertz model using flexsurv package
+gompertz_model <- flexsurvreg(Surv(Days, Status) ~ Age + SAPS1 + SOFA, data = icu_patients_df0_impute, dist = "gompertz")
+
+#print(summary(gompertz_model))
+
+# Define time intervals for Piecewise Constant Hazards model
+time_cuts <- c(0, 500, 1000, 1500, 2000, max(icu_patients_df0_impute$Days))
+
+# Fit the Piecewise Constant Hazards model using eha::pchreg
+pch_model <- eha::pchreg(surv_obj ~ Age + SAPS1 + SOFA + BUN_max + Creatinine_max + GCS_max + GCS_min + Urine_max + ICUType,
+                         data = icu_patients_df0_impute,
+                         cuts = time_cuts)
+#print(summary(pch_model))
+
+# Outputting coefficients from different models
+cat("Cox Model Coefficients:\n", paste(names(cox_model$coefficients), cox_model$coefficients, sep = ": ", collapse = "\n "), "\n\n")
+cat("Weibull Model Coefficients:\n", paste(names(weibull_model$coefficients), weibull_model$coefficients, sep = ": ", collapse = "\n "), "\n\n")
+cat("Gompertz Model Coefficients:\n", paste(names(gompertz_model$coefficients), gompertz_model$coefficients, sep = ": ", collapse = "\n "), "\n\n")
+cat("PCH Model Coefficients:\n", paste(names(pch_model$coefficients), pch_model$coefficients, sep = ": ", collapse = "\n "), "\n\n")
+
+```
+
+
+
+
+## References: 
+
+- Bagshaw, S. M., Webb, S. A., Delaney, A., George, C., Pilcher, D., Hart, G. K., & Bellomo, R. (2009). Very old patients admitted to intensive care in Australia and New Zealand: A multi-centre cohort analysis. Critical Care, 13(2), R45. https://ccforum.biomedcentral.com/articles/10.1186/cc7768
+-  Boumendil, A., Aegerter, P., Guidet, B., & CUB-Réa Network. (2005). Treatment intensity and outcome of patients aged 80 and older in intensive care units: A multicenter matched-cohort study. Journal of the American Geriatrics Society, 53(1), 88-93. https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1532-5415.2005.53016.x
+-  de Rooij, S. E., Govers, A. C., Korevaar, J. C., Giesbers, A. W., Levi, M., & de Jonge, E. (2008). Cognitive, functional, and quality of life outcomes of patients aged 80 and older who survived at least one year after planned or unplanned surgery or medical intensive care treatment. Journal of the American Geriatrics Society, 56(5), 816-822. https://onlinelibrary.wiley.com/doi/full/10.1111/j.1532-5415.2008.01671.x
+-  Lerolle, N., Trinquart, L., Bornstain, C., Tadié, J. M., Imbert, A., Diehl, J. L., Fagon, J. Y., & Guérot, E. (2010). Increased intensity of treatment and decreased mortality in elderly patients in an intensive care unit over a decade. Archives of Internal Medicine, 170(1), 59-65. https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/415749
+-  Valentin, A., Jordan, B., Lang, T., Hiesmayr, M., & Metnitz, P. G. (2003). Gender-related differences in intensive care: A multiple-center cohort study of therapeutic interventions and outcome in critically ill patients. Critical Care Medicine, 31(7), 1901-1907. https://journals.lww.com/ccmjournal/Abstract/2003/07000/Gender_related_differences_in_intensive_care__A.2.aspx
+-  Fuchs, L., Chronaki, C. E., Park, S., Novack, V., Baumfeld, Y., Scott, D., McLennan, S., Talmor, D., & Celi, L. A. (2012). ICU admission characteristics and mortality rates among elderly and very elderly patients. Intensive Care Medicine, 38(10), 1654-1661. https://link.springer.com/article/10.1007/s00134-012-2629-6
+-  Minne, L., Abu-Hanna, A., & de Jonge, E. (2008). Evaluation of SOFA-based models for predicting mortality in the ICU: A systematic review. Critical Care, 12(6), R161. https://ccforum.biomedcentral.com/articles/10.1186/cc7160
+-  Sacanella, E., Pérez-Castejón, J. M., Nicolás, J. M., Masanés, F., Navarro, M., Castro, P., & López-Soto, A. (2009). Functional status and quality of life 12 months after discharge from a medical ICU in healthy elderly patients: A prospective observational study. Critical Care, 13(2), R46. https://ccforum.biomedcentral.com/articles/10.1186/cc7769
+-  Heyland, D. K., Cook, D. J., Rocker, G. M., Dodek, P. M., Kutsogiannis, D. J., & Peters, S. (2005). The attributable morbidity and mortality of ventilator-associated pneumonia in the critically ill patient. The American Journal of Respiratory and Critical Care Medicine, 171(10), 1173-1179. https://www.atsjournals.org/doi/full/10.1164/rccm.200405-644OC
+-  Iapichino, G., Morabito, A., Mistraletti, G., Ferla, L., & Radrizzani, D. (2010). Age, illness severity, and ICU organizational factors influence long-term survival
+

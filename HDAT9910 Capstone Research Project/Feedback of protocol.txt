@@ -1,0 +1,10 @@
+Overview
+Succinct section, which outlines high level information about MIMIC data, and some information about what ML models were applied but without references. This section should be discussing literature about whether mortality can be predicted from the first 24 hours of ICU observations (aim 1) and whether there are associations with mortality and admissions on weekend/weekday (aim 2). There would have been some published studies on this using MIMIC data, but there would be other studies using other data sources. Given time, I would suggest the final report include more information about other literature, which can be summarised and then used to make comparisons with your results (if it does not detract too much from performing analyses).
+Methods
+This section has been very well. It shows a great deal of planning and thought into the process. Well done. A bit more information about which exposures will be examined, and how will they be derived e.g. if multiple daily measurements are present for some variables, which value will you use in the model? (this is where prior literature can help) When it comes to the outcome – be clear how this is defined. Noting that although we stipulate the first 24 hours of ICU information should be used for prediction, the outcomes itself should not be restricted to the same timeframe. Also noting that propensity score matching (question 2) may not be idea to use here, however survival analysis approach is fine.
+Timelines
+
+The timelines are fine and doable within the designed timeframe
+Report structure
+
+This was not included in your submission.

@@ -1,0 +1,10 @@
+
+Materials & Methods
+500 non-contrast enhanced CT’s of the brain performed in June, July and Aug. 2018 were independently analyzed on the presence of pathological hyperdensities by a deep learning software package and a fourth-year radiology resident. Their results were compared to a “gold standard analysis,” performed by a senior neuroradiologists. 
+
+Results
+Pathological hyperdensities were present in 134/500 patients, the majority of which were hemorrhages (128/134; 95.5%). Pathological hyperdensities were correctly identified by Aidoc software in 125/134 cases (93.3%), compared to 133/134 (99.3%) for the resident. Aidoc’s false-negative ratio was 9/134 (6.7%). When no pathological hyperdensities were present, the exam was rated negative by Aidoc software in 345/366 cases (94.3%), compared to 362/366 (98.9%) for the resident. Aidoc’s false-positive ratio was 21/366 (5.7%). The use of a deep learning algorithm for the detection of pathological intracranial hyper densities helped to detect urgent cases more quickly. 
+
+Conclusions
+The AI prototype algorithm has a high degree of diagnostic accuracy for the detection of hyperdensities on CT. Sensitivity and specificity are balanced, which is a prerequisite for its clinical usefulness.
+

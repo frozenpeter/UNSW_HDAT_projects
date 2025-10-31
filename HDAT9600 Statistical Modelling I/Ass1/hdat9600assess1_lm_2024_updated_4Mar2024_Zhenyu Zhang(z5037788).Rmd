@@ -1,0 +1,612 @@
+---
+title: "HDAT9600 Linear Models Assignment"
+subtitle: "Submission deadline - See Course Timetable"
+author: "<Zhenyu Zhang>"
+date: '`r format(Sys.Date(), "%d %B, %Y")`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# leave this code here, but feel free to adjust the options or add some more
+# see the knitr documentation for details
+knitr::opts_chunk$set(echo = TRUE, fig.width=6, fig.height=6)
+```
+
+<br>
+
+## Instructions
+
+This file is the R Markdown document in which you need to complete your HDAT9600 Linear Models assignment. This assignment is assessed and will count for 20% of the total course mark.
+
+You should complete ALL the tasks described below, in the spaces provided. Don't hesitate to ask for help (via OpenLearning @heidiwelberry) --- but remember that these are **individual** assignments and thus what you submit should be your own work, and you need to both understand and be able to explain what you did in your solutions.
+
+Each task below attracts the indicated number of marks (out of a total of 20 marks for the assignment).
+
+<br>
+
+
+### Marking hints and tips
+
+Marks will be awarded as indicated for each question. Make sure your R code is neat and easy to follow. Where the answer requires interpretation and discussion, you can keep this brief but DO try to include evidence for your statements by referencing the specific results which support your conclusions. Where the answer requires production of a plot, make sure to label all axes with clear labels and give the plot a title.  
+
+
+
+## Task 1 (10 marks)
+
+
+In Task 1 of this assignment, you will be using a dataset called `body` which is a modified version of the `fat` dataset from the Faraway package in R. You will need to download the file `body.csv` from Open Learning and read it in using the read.csv() command in the first code chunk below. Age, weight, height, and 6 body circumference measurements are recorded for 200 men. Each man’s percentage of body fat was accurately estimated by an underwater weighing technique. A summary of the variables is provided below:
+
+---
+
+pct - Percent body fat (%)  <br>
+age  - Age(yrs) <br>
+weight - Weight(lbs) <br>
+height - Height(inches) <br>
+neck - Neck circumference(cm) <br>
+chest - Chest circumference(cm) <br>
+abdom - Abdomen circumference(cm) at the umbilicus and level with the iliac crest <br>
+hip - Hip circumference(cm) <br>
+thigh - Thigh circumference(cm) <br>
+biceps - Extended biceps circumference(cm) <br>
+
+---
+
+Task 1 Set-Up
+```{r task1-setup}
+# this loads the body dataset and makes it available for code in 
+# subsequent code chunks.
+# set your working folder where the datasets are stored
+mydat <- file.path("C:/Users/froze/OneDrive/Documents/2.1 UNSW bioinfo/HDAT9600/Assignment/Ass1")
+
+body <- read.csv(file.path(mydat, "body.csv"))
+
+```
+
+a.  Fit a linear regression model to the `body` dataset using `pct` as the outcome (response) variable including all other variables as predictors. Call this model `full.mod`. Print the summary output for this model (0.5 marks)
+
+```{r task-1-a}
+# insert your R code (with comment lines if you wish) here
+# The .  means "all other variables in the data frame
+full.mod <- lm(pct ~ ., data = body)
+summary(full.mod)
+```
+
+b. Compute and display the 95% and 90% confidence intervals for  the `age` variable in the full model. (Hint: examine the manual (help) page for the `confint()` function.) (0.5 marks)
+
+```{r task-1-b}
+# insert your R code (with comment lines if you wish) here
+# 95% confidence interval for the age variable
+confint(full.mod, "age", level = 0.95)
+# 90% confidence interval for the age variable
+confint(full.mod, "age", level = 0.90)
+```
+
+c. What does your output from parts a AND b tell you about the relationship between age and percent body fat (1 mark).
+
+_Estimate coefficient of age is 0.14526, which means when holding all other variables constant each additional year of age is associated with an increase of 0.14526% in body fat percentage(pct)._
+_Standard error is 0.08553 indicating the variability of the age coefficient estimate._
+_The t-value for age is 1.698. This value is used to determine the statistical significance of the coefficient. The null hypothesis in this case states that the specific predictor (age) has no effect on the dependent variable (percent body fat). Assuming the null hypothesis is true, the t-value (Estimate for age: 0.14526 / Standard Error for age: 0.08553) is a measure of how many standard deviations the coefficient is away from zero. A higher absolute value of the t-value indicates a greater likelihood that the variable is impact or significant in the model. In this case 1.698 is a moderate value, indicating some influence of age on body fat percentage, but it's not overwhelmingly strong._
+_The p-value for age is 0.09109. In general, a p-value less than 0.05 is considered statistically significant. Here, the p-value is close to 0.10, suggesting a marginal statistical significance. Thus, there is some evidence of a relationship between age and percent body fat, but this evidence is not strong._
+_95% Confidence interval include 0, indicates that there is some uncertainty about the significance of the effect of age on pct. In addition, this interval skew towards positive values, it suggests a trend where age might be positively associated with pct._
+_90% Confidence interval does not include 0 and is entirely in the positive range, indicates that there is a more confident assertion of age is positively associated with pct at the 90% confidence level._
+
+d. Fit a second model using `pct` as the outcome and this time include only `age`, `weight`, and  `height` (on the basis that these are often stored within a patient's medical record). Call this model `simple.mod`. Print the summary output for this model (0.5 marks). 
+
+```{r task-1-d}
+# insert your R code (with comment lines if you wish) here
+# Fit a simplified linear model
+simple.mod <- lm(pct ~ age + weight + height, data = body)
+# Print the summary of the simple model
+summary(simple.mod)
+
+
+```
+
+e. Compare the two models. Hint: look at the section on "Testing pairs of predictors" in Chapter 2. The same method can be used to compare models that differ by more than just two predictors. Comment on whether it is justifiable to use the simple model or not and explain why. (2 marks)
+
+```{r task-1-e}
+# insert your R code (with comment lines if you wish) here
+# Compare the models using an F-test
+anova(simple.mod, full.mod)
+```
+
+_Res.Df (Residual Degrees of Freedom) indicates the number of observations minus the number of estimated parameters. For Model 1 (simpler model) it is '196' and for Model 2 (full model) it is '190'._
+_RSS (Residual Sum of Squares) measures the amount of variation in the dependent variable (`pct`) that is not explained by the model. Lower values indicate better model fit. In this case, `3705.4` for the simpler model and `2379.3` for the full model, suggesting full model has better fit._
+_Df (Difference in Degrees of Freedom) is 6 which is the difference in the number of predictors between the full model and the simpler model. (6 predictors are `neck`, `chest`, `abdom`, `hip`, `thigh`, and `biceps`)_
+_Sum of Sq (Difference in Sum of Squares) is 1326, which is the reduction in RSS when moving from the simpler model to the full model._
+_F-Statistic is `17.649`, which tests whether the reduction in residual sum of squares (RSS) from Model 1 to Model 2 is significant. It's calculated based on the difference in RSS between the models, adjusted for the difference in degrees of freedom._
+_Pr(>F) (P-value) is `3.279e-16`, which is extremely small (far below 0.05). As this p-value tests the null hypothesis [adding the additional variables (`neck`, `chest`, `abdom`, `hip`, `thigh`, `biceps`) to the simpler model does not significantly improve the fit of the model], we can reject the null hypothesis . This means that the additional variables in the full model significantly improve the model’s fit compared to the simpler model. The full model explains more variability in the percent body fat than the simpler model and provides a  better understanding of the percent body fat.Therefore, from a statistical perspective, it is justified to use the full model over the simpler model for predicting percent body fat. However, the decision to use a more complex model should also consider factors like the interpretability of the model, the availability of data in practical scenarios, and the specific needs of the analysis et al._
+
+f. Compute a 95% **prediction** interval for the **mean** (not median) predictor values for the full and reduced models, and write a single sentence comparing the intervals. Do the intervals vary by much? (2 marks)
+
+```{r task-1-f}
+# insert your R code (with comment lines if you wish) here
+# Calculate mean values for all predictors
+# 'na.rm = TRUE' ensures that missing values (NA) are ignored in the mean calculation.
+mean_values <- with(body, data.frame(
+  age = mean(age, na.rm = TRUE),
+  weight = mean(weight, na.rm = TRUE),
+  height = mean(height, na.rm = TRUE),
+  neck = mean(neck, na.rm = TRUE),
+  chest = mean(chest, na.rm = TRUE),
+  abdom = mean(abdom, na.rm = TRUE),
+  hip = mean(hip, na.rm = TRUE),
+  thigh = mean(thigh, na.rm = TRUE),
+  biceps = mean(biceps, na.rm = TRUE)
+))
+
+# Compute the 95% prediction interval for the full via predict() function
+predict(full.mod, newdata = mean_values, interval = "prediction", level = 0.95)
+
+# Compute the 95% prediction interval for the simple model
+predict(simple.mod, newdata = mean_values, interval = "prediction", level = 0.95)
+
+```
+
+_For both models, the `fit` value (predicted percent body fat) at the mean values of the predictors is 16.026. This means that, on average, an individual with mean characteristics (as defined by the predictors in each model) is expected to have a body fat percentage of approximately 16.026%. It also indicates a same/similar predicted outcome from both models when considering the average case._
+_Width of Prediction Intervals: The interval range of full Model is about 9% to 23% body fat, the interval range of simple Model is about 7% to 25% body fat.  full model's prediction interval is narrower, suggesting it provides more precise predictions for the average individual compared to the simplified model. The prediction interval for the simplified model is slightly wider than for the full model. This implies that there's more uncertainty in the predictions when only age, weight, and height are considered, compared to when all the predictors are included. The difference in interval widths is noticeable but not extreme, indicating both models provide reasonably accurate predictions for percent body fat with mean predictor values, the full model offers a bit more precision and the simple model has simplicity and ease of data collection._ 
+
+```{r task-1-f-2}
+library(ggplot2)
+
+# Create a range of values for age
+age_range <- seq(min(body$age, na.rm = TRUE), max(body$age, na.rm = TRUE), length.out = 100)
+
+# Data frame for predictions from the full model
+df_full <- with(body, data.frame(
+  age = age_range,
+  weight = mean(weight, na.rm = TRUE),
+  height = mean(height, na.rm = TRUE),
+  neck = mean(neck, na.rm = TRUE),
+  chest = mean(chest, na.rm = TRUE),
+  abdom = mean(abdom, na.rm = TRUE),
+  hip = mean(hip, na.rm = TRUE),
+  thigh = mean(thigh, na.rm = TRUE),
+  biceps = mean(biceps, na.rm = TRUE)
+))
+df_full$pct_pred <- predict(full.mod, newdata = df_full)
+
+# Data frame for predictions from the simple model
+df_simple <- data.frame(
+  age = age_range,
+  weight = mean(body$weight, na.rm = TRUE),
+  height = mean(body$height, na.rm = TRUE)
+)
+df_simple$pct_pred <- predict(simple.mod, newdata = df_simple)
+
+# Create the effect plot
+ggplot() +
+  geom_line(data = df_full, aes(x = age, y = pct_pred, color = "Full Model")) +
+  geom_line(data = df_simple, aes(x = age, y = pct_pred, color = "Simple Model"), linetype = "dashed") +
+  labs(x = "Age", y = "Predicted Percent Body Fat", title = "Effect of Age on Predicted Body Fat Percentage") +
+  scale_color_manual(values = c("Full Model" = "blue", "Simple Model" = "red")) +
+  theme_minimal() +
+  ggtitle("Comparison of Full Model and Simple Model Predictions") +
+  theme(legend.title = element_blank())
+
+```
+
+g. Repeat Part g. but this time for the **confidence** intervals for the **mean** (not median) predictor values for the full and reduced models, and again write a single sentence comparing the intervals. Do the intervals vary by much? (2 marks)
+
+```{r task-1-g}
+# insert your R code (with comment lines if you wish) here
+# Compute the 95% prediction interval for the full model
+predict(full.mod, newdata = mean_values, interval = "confidence", level = 0.95)
+
+# Compute the 95% prediction interval for the simple model
+predict(simple.mod, newdata = mean_values, interval = "confidence", level = 0.95)
+
+```
+
+_For both models, the `fit` value (predicted percent body fat) at the mean values of the predictors is 16.026. This means that, on average, an individual with mean characteristics (as defined by the predictors in each model) is expected to have a body fat percentage of approximately 16.026%. It also indicates a same/similar predicted outcome from both models when considering the average case._
+_The interval span of full model is approximately 0.988% and the interval span of simple model is approximately 1.213%.The confidence interval of both models are similar, the simple model is slightly wider._
+_The lesser difference in the width of confidence intervals (Part g) between the full and simple models compared to the prediction intervals (Part f) is because confidence intervals only consider the uncertainty in estimating the mean response. On the other hand, prediction intervals reflect the variability of actual data points around the predicted mean. Here, the full model's additional predictors help capture more of this variability, leading to narrower intervals and a more noticeable difference from the simplified model._
+
+
+h.  Using the simple model, identify the three observations with the greatest Cook's distance. Remove (or exclude) those observations from the dataset and re-fit the simple model. Comment on any differences you see in the model summary (if any). (1.5 marks)
+_(Note: updated March 4th to say three observations. If you have identified two observations this will also be marked correct)_
+
+```{r task-1-h-1}
+# insert your R code (with comment lines if you wish) here
+# Calculate Cook's distances for the simple model
+cooks.distances <- cooks.distance(simple.mod)
+faraway::halfnorm(cooks.distances, 3, ylab="Cook's distances")
+```
+
+```{r task-1-h-2}
+# Order the observations by their Cook's distance and select the top three
+high.cooks <- order(cooks.distances, decreasing = TRUE)[1:3]
+
+# Remove the three most influential observations from the dataset
+body_reduced <- body[-high.cooks, ]
+
+# Refit the simple model without the most influential observations
+simple.mod.reduced <- lm(pct ~ age + weight + height, data = body_reduced)
+
+# Output the summaries of the simple model and the new model
+summary(simple.mod)
+summary(simple.mod.reduced)
+
+```
+
+_The range of residuals has decreased (`Min` from -10.5708 to -7.3206 and `Max` from 15.1292 to 9.2227), indicating a reduction in extreme values, which suggests that the model may now be providing a better fit to the majority of the data._
+
+_The estimate coefficient for `age` has increased slightly (from 0.52285 to 0.56869), suggesting that, after removing the influential points, age has a slightly stronger relationship with percent body fat._
+_The estimate coefficients for `weight` and `height` are quite stable, basically unchanged._
+
+_Residual standard error has decreased from 4.348 to 4.024, which implies that the predictions are now, on average, closer to the actual values._
+
+_Both the Multiple R-squared and Adjusted R-squared values have increased (from 0.5293 to 0.5814 and from 0.5221 to 0.5749, respectively), indicating that the model without the top 3 influential observations explains a higher proportion of the variance in percent body fat._
+
+_The F-statistic has increased from 73.46 to 89.36, the p-value remains extremely small, indicating that the model is still statistically significant and that the overall fit has improved._
+
+_Removing the 3 observations with the highest Cook's distances appears to have had a positive impact on the simplified regression model. The overall fit of the model has improved as indicated by higher R-squared values and a lower residual standard error. This suggests that the influential observations may have been outliers or measurement errors or data entry errors._
+
+```{r task-1-h-3}
+par(mfrow = c(2, 2)) # Set up the graphics to display four plots on one page
+plot(simple.mod)
+
+```
+
+<br>
+
+<br>
+
+## Task 2 (10 marks)
+
+In this task, you will be using a dataset called `hips2` which is a modified version of the `hips` dataset, also from the _faraway_ package for R. You will need to download the file hips2.csv from Open Learning and load it in using the first code chunk below.
+
+The `hips2` dataset is adapted from a study undertaken in the 1950s at the [Royal Mineral Hospital](https://en.wikipedia.org/wiki/Royal_National_Hospital_for_Rheumatic_Diseases) (now known as the Royal National Hospital for Rheumatic Diseases) in Bath, UK. The study involved patients with [ankylosing spondylitis](https://en.wikipedia.org/wiki/Ankylosing_spondylitis), an auto-immune disease which causes inflammation and eventual seizing up (ankylosis) of the joints of the spine, and to a lesser extent of the hips and shoulders. Patients were randomly allocated to either a treatment group, in which they received physiotherapy involving daily stretching exercises for their hip joints, or to a control group in which no stretching or other physiotherapy was provided. Hip mobility in terms of flexion (bringing the knee up towards the chest) and rotation (rotating the knee inwards and outwards) were measured on each side (right and left), before the study commenced, and after it was completed. A brief description of the variables is provided below. 
+
+---
+
+fbef - flexion angle before <br>
+faft - flexion angle after <br>
+rbef - rotation angle before <br>
+raft - rotation angle after <br>
+grp - treatment group (a factor with 2 levels: control, treat) <br>
+side - side of the body (a factor with 2 levels: right, left) <br>
+person - id for the individual <br>
+
+---
+
+
+Task 2 Set-Up
+```{r task2-setup}
+# this loads the hips dataset and makes it available for code in 
+# subsequent code chunks. 
+# note: make sure the hips2 dataset is saved in the same folder that we assigned as "mydat"
+
+hips2 <- read.csv(file.path(mydat, "hips2.csv"))  
+
+```
+
+
+a. Carry out a brief exploratory data analysis, examining each variable, and the relationships between all the variables. How many patients were assigned to each group (treatment or control). Are there differences in the variables between the two groups (treatment and control) or sides (left or right)? Show your code and written explanations.  (2.5 marks)
+
+```{r task-2-a-1}
+# insert your R code (with comment lines if you wish) here
+# Summary statistics for each variable
+summary(hips2)
+
+# Count the number of patients in each group
+table(hips2$grp)
+
+```
+
+_After the treatment period (faft), there is a general increase in flexion angles, as evidenced by higher minimum, median, and maximum values. This suggests that the treatment may have led to an improvement in the flexion angle._
+_Rotation angles show a similar pattern to flexion angles, with increases from before (rbef) to after (raft) treatment.The minimum values remain the same, which could be due to the physical limitations of the patients with the most severe conditions not responding to treatment. The increases in the median and maximum values suggest that patients generally experienced an improvement in rotation angle after the treatment._
+_The dataset contains more patients in the treatment group (48 data) than in the control group (22 dara)._
+_The `person` variable serves as patients' ID, ranges from 2 to 39, indicating that there are 38 different patients in the dataset._ 
+
+```{r task-2-a-2}
+# Boxplots to visualize the distribution of flexion and rotation angles, before and after treatment
+boxplot(hips2$fbef ~ hips2$grp, main = "Flexion Before Treatment by Group", ylab = "Angle")
+boxplot(hips2$faft ~ hips2$grp, main = "Flexion After Treatment by Group", ylab = "Angle")
+boxplot(hips2$rbef ~ hips2$grp, main = "Rotation Before Treatment by Group", ylab = "Angle")
+boxplot(hips2$raft ~ hips2$grp, main = "Rotation After Treatment by Group", ylab = "Angle")
+```
+
+_The four boxplots compare the flexion and rotation angles before and after treatment for patients in both the control and treatment groups._
+_The first Plot is Flexion Before Treatment by Group: There is one outlier in the control group and two outlier in the treat group, indicating these patients with unusually low flexion angle or measurement errors or data entry errors. The treatment group seems to have a slightly higher variation in flexion angles than control group._
+_The second plot is Flexion After Treatment by Group: Post-treatment, both groups show increases in the median flexion angle. The treatment group's median flexion angle post-treatment appears got a larger increase than that of the control group, suggesting a potential effect of the treatment. There is still one notable outlier in the control group which is more likely due to non-treatment-related factors._
+_The third plot is Rotation Before Treatment by group: Before treatment, the control group displaying a slightly lower median angle. There are one and two outliers in the control and treatment group._
+_The fourth plot is Rotation After Treatment by Group: After treatment, the median rotation angle in the treatment group has obviously increased compared to the control group. There are more outliers in the control group after treatment, which might warrant further investigation._
+ 
+
+```{r task-2-a-3}
+# Boxplots to compare sides
+boxplot(hips2$fbef ~ hips2$side, main = "Flexion Before Treatment by Side", ylab = "Angle")
+boxplot(hips2$faft ~ hips2$side, main = "Flexion After Treatment by Side", ylab = "Angle")
+boxplot(hips2$rbef ~ hips2$side, main = "Rotation Before Treatment by Side", ylab = "Angle")
+boxplot(hips2$raft ~ hips2$side, main = "Rotation After Treatment by Side", ylab = "Angle")
+```
+
+_These boxplots help to investigate the symmetry in the condition's progression and the treatment's effects._
+_The symptoms of ankylosing spondylitis are symmetrical._
+_In general, as indicated by the increases in median values post-treatment, the treatment appears to have a positive effect on both flexion and rotation._
+
+```{r task-2-a-4}
+# Pairwise comparisons between groups for each measurement
+t.test(hips2$fbef ~ hips2$grp)
+t.test(hips2$faft ~ hips2$grp)
+t.test(hips2$rbef ~ hips2$grp)
+t.test(hips2$raft ~ hips2$grp)
+```
+
+_In Flexion Before Treatment t-test result, the p-value is 0.01349, which is less than the standard alpha level of 0.05, indicating that there is a statistically significant difference in the mean flexion angles between the control and treatment groups before treatment , which could confound the results._
+_In Flexion After Treatment t-test result, the p-value is very small (1.01e-05), much less than the standard alpha level of 0.05, suggesting a highly significant difference in mean flexion angles between the two groups after treatment. This also supports the potential effectiveness of the treatment._
+_In Rotation Before Treatment t-test result, the p-value is 0.7808, which is higher than the standard alpha level of 0.05, meaning there is no significant difference in the mean rotation angles between the control and treatment groups before treatment._
+_In Rotation After Treatment t-test result, the p-value is 0.02475, which is less than the standard alpha level of 0.05, indicating a statistically significant difference in the mean rotation angles after treatment between the control and treatment groups. Again, it supports the potential effectiveness of the treatment._
+
+
+```{r task-2-a-5}
+# Pairwise comparisons between sides for each group
+t.test(hips2$fbef ~ hips2$side)
+t.test(hips2$faft ~ hips2$side)
+t.test(hips2$rbef ~ hips2$side)
+t.test(hips2$raft ~ hips2$side)
+```
+
+_In Rotation After Treatment by Side t-test result, the p-value is 0.03538, which is below the standard threshold of 0.05, indicating a statistically significant difference in post-treatment rotation angles between the left and right sides with the right side having a higher mean angle post-treatment. This could suggest that the treatment has a different effect on rotation depending on the side, or it could be due to natural variability or other factors not accounted for in the analysis._
+
+Add additional code blocks and text blocks as needed.
+
+
+b. Create two new variables, called `flexdiff` and `rotdiff`, which contain the difference between the before and after flexion, or the before and after rotation, respectively. Use histograms to show the distribution of these new variables for each of the two groups (treatment or control). What do you observe? (1 mark)
+
+```{r task-2-b}
+# insert your R code (with comment lines if you wish) here
+# Create the `flexdiff` and `rotdiff` variables
+hips2$flexdiff <- hips2$faft - hips2$fbef
+hips2$rotdiff <- hips2$raft - hips2$rbef
+
+#table(hips2$flexdiff[hips2$grp == "control"])
+#table(hips2$flexdiff[hips2$grp == "treat"])
+
+layout(matrix(c(1, 3, 2, 4), nrow=2, byrow=TRUE), widths = c(1, 1), heights = c(1, 1))
+par(mar = c(5, 4, 4, 2) + 0.1)  # Adjust the numbers as necessary for your specific case
+
+# Calculate breaks for histograms
+flexdiff_min <- min(hips2$flexdiff)
+flexdiff_max <- max(hips2$flexdiff)
+rotdiff_min <- min(hips2$rotdiff)
+rotdiff_max <- max(hips2$rotdiff)
+
+# Ensure breaks span slightly beyond the min and max
+flexdiff_breaks <- seq(floor(flexdiff_min), ceiling(flexdiff_max), by=5)
+#rotdiff_breaks <- seq(floor(rotdiff_min), ceiling(rotdiff_max)+1, by=5)
+rotdiff_breaks <- seq(from = -15, to = 25, by = 5)
+
+#print(hips2$rotdiff[hips2$grp == "treat"])
+#print(rotdiff_breaks)
+
+
+# Upper Plot flexdiff (Control Group)
+hist(hips2$flexdiff[hips2$grp == "control"],
+     breaks = flexdiff_breaks,
+     main = "Flexion Difference for Control Group",
+     xlab = "Flexion Difference",
+     ylab = "Frequency",
+     col = "blue",
+     ylim = c(0, 20),
+     axes = FALSE)
+axis(2, las=1)
+axis(1, at=seq(from=min(hips2$flexdiff)+1, to=max(hips2$flexdiff)+1, by=5))
+mtext("Control Group", side=3, line=0)
+
+# Lower Plot flexdiff (Treatment Group)
+hist(hips2$flexdiff[hips2$grp == "treat"],
+     breaks = flexdiff_breaks,
+     main = "Flexion Difference for Treatment Group",
+     xlab = "Flexion Difference",
+     ylab = "Frequency",
+     col = "red",
+     ylim = c(0, 20),
+     axes = FALSE)
+axis(2, las=1)
+axis(1, at=seq(from=min(hips2$flexdiff)+1, to=max(hips2$flexdiff)+1, by=5))
+mtext("Treatment Group", side=3, line=0)
+
+
+# Upper Plot rotdiff (Control Group)
+hist(hips2$rotdiff[hips2$grp == "control"],
+     breaks = rotdiff_breaks,
+     main = "Rotation Difference for Control Group",
+     xlab = "Rotation Difference",
+     ylab = "Frequency",
+     col = "green",
+     ylim = c(0, 20), xlim = c(-10, 25),
+     axes = FALSE)
+axis(2, las=1)
+axis(1, at=seq(from=-10, to=25, by=5))
+mtext("Control Group", side=3, line=0)
+
+# Lower Plot rotdiff (Treatment Group)
+hist(hips2$rotdiff[hips2$grp == "treat"],
+     breaks = rotdiff_breaks,
+     main = "Rotation Difference for Treatment Group",
+     xlab = "Rotation Difference",
+     ylab = "Frequency",
+     col = "yellow",
+     ylim = c(0, 20), xlim = c(-10, 25),
+     axes = FALSE)
+axis(2, las=1)
+axis(1, at=seq(from=-10, to=25, by=5))
+mtext("Treatment Group", side=3, line=0)
+
+# Reset the graphical parameters to default
+par(mfrow = c(1, 1), mar = rep(5, 4))
+
+```
+
+_Four histograms represent the distribution of differences in flexion and rotation angles before and after the treatment for both control and treatment groups._
+_Flexion Difference for Control Group (Blue Histogram): The majority of differences are clustered around a small positive value, suggesting slight improvements in the flexion angle for most control group subjects._
+_Flexion Difference for Treatment Group (Red Histogram): This group shows a wide spread in the distribution of flexion differences, with a significant number of subjects experiencing improvements, as evidenced by the higher frequency of larger positive values. The highest peak is between 5 to 10, indicating a considerable improvement in flexion angles after treatment._
+_Rotation Difference for Control Group (Green Histogram): The distribution is fairly uniform across different categories, with a slightly higher frequency of instances showing small improvements in rotation. However, there is a notable frequency for a difference of 0, indicating no change in a significant number of subjects._
+_Rotation Difference for Treatment Group (Yellow Histogram): The distribution suggests varied responses to treatment with most changes being positive, indicating improved rotation. There is a notable peak in the frequency for smaller positive differences, with a gradual decrease in frequency for larger differences._
+_Over all, These four histograms suggest that the treatment was generally effective in improving both flexion and rotation, as more so for the treatment group than for the control group._
+
+
+c. The data set contains two observations for each patient --- one for the right hip, and one for the left hip. If we fit standard linear regression models using OLS, should we analyse all the data in one model, or should we fit two separate models, one for the right side hips and the other for the left side hips, or should we fit one model and include the `side` variable as a predictor? Justify your answer based on the assumptions we rely on for OLS linear models.  (1.5 marks)
+
+_When fitting standard linear regression models using OLS (Ordinary Least Squares), there are some assumptions must be considered, including:_
+    _Independence - If the measurements from the right and left hips of the same patient are correlated (which is often the case as they are from the same person), this violates the OLS assumption of independence of errors. This suggests that a single model for all data might not be appropriate unless this within-subject correlation is accounted for._
+    _Homoscedasticity - The variance of error terms is constant across all levels of the independent variables._
+    _No multicollinearity - Independent variables are not highly correlated with each other._
+    _Normality - The residuals of the model are normally distributed._
+    
+_If analyse all data in one model:_
+    _It could violate the independence assumption because the observations from the same patient are likely to be correlated._
+
+_If fit two separate models:_
+    _It allows for the modeling of potentially different relationships on each side._
+    _Tt would not allow for a direct comparison between the right and left sides._
+    _It does not directly address the independence issue either as the same patient’s measurements would be split across two models._
+    
+_If incorporating 'side' as a Predictor in a single model:_
+    _It would allow for direct comparison and control for the side of the body in the analysis, to account for systematic differences between right and left hips._
+    _It could still violate the independence assumption unless the model accounts for the repeated measures on the same individuals._
+    _It still may not adequately account for the within-patient correlation between the two measurements._
+
+
+_(Please not include this as part of my answer) # A better approach would be using a mixed-effects model (or multilevel model) which can account for the non-independence of observations from the same patient by including random effects._
+
+d.  Fit a model to the data for right-side hips only. Use `flexdiff` as the outcome, and the `grp` variable as a sole predictor. Report on whether there appears to be a treatment effect. Repeat this for the left hips. (1 mark)
+
+```{r task-2-d}
+# insert your R code (with comment lines if you wish) here
+# Flexion difference model for right-side hips
+right_flex <- lm(flexdiff ~ grp, data = hips2[hips2$side == "right",])
+summary(right_flex)
+
+# For left-side hips
+left_flex <- lm(flexdiff ~ grp, data = hips2[hips2$side == "left",])
+summary(left_flex)
+
+
+```
+
+_For the right-side hips, the treatment effect has an estimated increase of 3.606 degrees in flexion difference, but with a p-value of 0.196, which is not statistically significant at the typical p-value of 0.05. This suggests that, for the right-side hips, the treatment does not have a statistically significant effect on increasing the flexion difference compared to the control._
+_For the left-side hips, the treatment effect also shows an estimated increase of 3.606 degrees in flexion difference, and the p-value here is 0.387, which is again not statistically significant. This indicates that for the left-side hips, there is also no statistically significant effect of the treatment on flexion difference._
+_The high p-values suggesting that the observed differences in means between the treatment and control groups could very well be due to random chance rather than the effect of the treatment._
+_Additionally, the low R-squared values for both models indicates the models are not a good fit, as the group variable does not explain a large portion of the variance in the `flexdiff` for either side._
+
+
+
+e. Repeat all aspects of Part d. but substituting the `rotdiff` variable as the outcome. (1 mark)
+
+```{r task-2-e}
+# insert your R code (with comment lines if you wish) here
+# Rotation difference model for right-side hips
+right_rot <- lm(rotdiff ~ grp, data = hips2[hips2$side == "right",])
+summary(right_rot) # Summarize the model to view the treatment effect
+
+# For left-side hips
+left_rot <- lm(rotdiff ~ grp, data = hips2[hips2$side == "left",])
+summary(left_rot)
+```
+
+_For the right-side hips, the treatment effect (`grptreat`) is associated with an estimated increase of 5.667 degrees in rotation difference with a p-value of 0.0123. This indicates that the treatment has a statistically significant effect on increasing the rotation difference compared to the control for the right-side hips._
+
+_For the left-side hips, the treatment effect also shows an estimated increase of 6.572 degrees in rotation difference, with a p-value of 0.0085. Similar to the right-side hips, this indicates a statistically significant effect of the treatment on the rotation difference for the left-side hips._
+
+_Both models have a higher R-squared value compared to the flexion difference models, suggesting that the `grp` variable explains a more substantial portion of the variance in `rotdiff` for both sides. However, R-squared values [0 to 1] still at low level indicates these models are not a good fit_
+
+
+f. For the right-side hips only, re-fit the models you created for Part d. and Part e., but add the "before" values for flexion and rotation, respectively, to each model as additional predictors. Report briefly on what you find.  (1 mark)
+
+```{r task-2-f}
+# insert your R code (with comment lines if you wish) here
+# Include "before" values as predictors for right-side hips
+right_flex_bef <- lm(flexdiff ~ grp + fbef, data = hips2[hips2$side == "right",])
+summary(right_flex_bef)
+
+right_rot_bef <- lm(rotdiff ~ grp + rbef, data = hips2[hips2$side == "right",])
+summary(right_rot_bef)
+```
+
+_For the flexion difference model, the treatment effect (`grptreat`) remains statistically significant, with a higher estimated effect size of 6.442 degrees increase. Furthermore, the before flexion value (`fbef`) is negatively associated with the flexion difference, which implies that patients with a larger initial flexion had a smaller increase. In addtion, this effect is significant (p-value is 0.0005426). This model has a much-improved fit with a multiple R-squared of 0.375, which is a considerable increase from the previous model (multiple R-squared = 0.05016) without the `fbef` variable._
+
+_For the rotation difference model, the treatment effect (`grptreat`) is also statistically significant and indicates an estimated increase of 5.155 degrees in the rotation difference. The before rotation value (`rbef`) shows a negative association, suggesting that patients with greater initial rotation had a smaller increase in rotation difference, although this effect is only marginally significant (p-value = 0.0726). The fit of the model has improved with a multiple R-squared of 0.2555._
+
+_In both models, the inclusion of the "before" values seems to provide a more nuanced understanding of the treatment effect, showing that the initial state of the patient plays a significant role in the outcome. The models also have improved explanatory power as indicated by the higher R-squared values, meaning they account for a greater proportion of the variance in the outcome variables compared to the models without the "before" values._
+
+
+
+g.  Use both "before" and "after" values as predictors (as well as `grp`) in a model using right-side hips only, with `rotdiff` as the outcome. Comment on what is wrong with this model. (1 mark)
+
+```{r task-2-g}
+# insert your R code (with comment lines if you wish) here
+# Incorrect model using both "before" and "after" values
+right_incorrect_model <- lm(rotdiff ~ grp + rbef + raft, data = hips2[hips2$side == "right",])
+summary(right_incorrect_model)
+```
+
+_This model is fundamentally flawed because the outcome `rotdiff` is directly calculated from included value `rbef` and `raft` (rotdiff = raft - rbef), leading to perfect multicollinearity (R-squared values are both equal to 1). This means that the "after" value (raft) is a perfect linear function of the "before" value (rbef) and the outcome (rotdiff), making one of the predictors completely redundant. It violates the basic assumptions of regression analysis._
+
+_The residual standard error is extremely small (around 10^-15), indicating that the residuals are close to zero, which suggests an almost perfect fit._
+_The coefficients for `rbef` and `raft` are exactly -1 and 1, respectively, which mirrors the equation used to compute `rotdiff`._
+_The p-values for `rbef` and `raft` are virtually zero, indicating that these predictors are statistically significant, but this significance is an artifact of their direct relationship with the outcome, not their explanatory power._
+_The R-squared value is 1, meaning the model explains 100% of the variance in the outcome, which is practically impossible in real-world data and suggests overfitting due to the inclusion of redundant predictors._
+
+h.  Plot fitted values for the hip rotation model you fitted in *Part f.*, holding the `rbef` variable fixed at the mean value of that variable for right hips across both treatment and control groups. (1 mark) 
+
+
+```{r task-2-h-1}
+# insert your R code (with comment lines if you wish) here
+library(car)
+
+# Calculate the mean of rbef for right hips
+mean_rbef_right <- mean(hips2$rbef[hips2$side == "right"])
+
+# Adjust the model by fixing rbef at its mean value
+hips2$rbef_adjusted <- hips2$rbef - mean_rbef_right
+
+# Re-fit the hip rotation model with the adjusted rbef
+right_rot_bef_adjusted <- lm(rotdiff ~ grp + rbef_adjusted, data = hips2[hips2$side == "right",])
+
+# Plot the partial residual plot for the adjusted model
+crPlots(right_rot_bef_adjusted)
+```
+
+_The figure shows two component plus residual plots, which are helpful for diagnosing issues with a linear regression model._
+
+_The plot on the left side shows the relationship between the grouping variable grp (with levels "control" and "treat") and the residuals from your linear model. This plot can be used to check if the residuals are evenly distributed across the levels of grp. If the boxes are symmetric and centered around zero, it suggests that the model is well-calibrated for each group. If one group has consistently higher or lower residuals, it might indicate that the model is not performing equally well for both groups._
+  _- The location of the median line within the boxes, which provides insight into the central tendency of the residuals within each group._
+  _- The length of the boxes and the whiskers, which give an idea about the variability within the groups._
+
+
+_The plot on the right side shows the relationship between the adjusted rbef variable and the residuals. The pink line suggests the LOESS (locally estimated scatterplot smoothing) fit to the data, which gives a sense of the trend. The LOESS line should be approximately horizontal and centered around zero if the relationship is linear and the model is appropriate. If the line shows a pattern (like a curve), this might suggest non-linearity, indicating that a linear model may not be the best fit for the data._
+_In the plot on the right, the pink LOESS line is sloped and not horizontal, suggesting that the relationship between rbef and the response might be non-linear. Moreover, the residuals should be randomly scattered around the LOESS line without forming any discernible patterns and the patterns or the residuals are not centered around zero. This may indicate problems such as non-linearity, outliers, or non-constant variance._
+
+
+
+```{r task-2-h-2}
+# For a basic plot of the fitted values
+# Assuming 'right_rot_bef_adjusted' is your model object
+fit_values <- fitted(right_rot_bef_adjusted)
+res_values <- residuals(right_rot_bef_adjusted)
+
+# Create the plot
+plot(fit_values, res_values, xlab = "Fitted", ylab = "Residuals")
+
+# Add a horizontal line at 0
+abline(h = 0)
+
+# Fit a smooth curve (using LOESS) and add to the plot
+smoothed_values <- lowess(fit_values, res_values)
+lines(smoothed_values, col = "yellow")
+
+
+```
+
+_This residual plot is commonly used in regression analysis to check the assumption that the residuals are randomly distributed with constant variance (homoscedasticity). The yellow line representing a smoothed curve through the residuals. In an ideal scenario, this line would be flat and close to the horizontal line at zero, which would indicate that the model's predictions are unbiased at every level of fitted values._
+_If the residuals appear to be randomly scattered around the horizontal line without any systematic pattern, this indicates that the model's assumptions are likely being met. In this case, the smoothed line shows a slight curve rather than being completely flat, it indicates that the residuals may not be perfectly randomly distributed._
+
+### Save and knit
+
+**Reminder**: don't forget to save this file and to knit it to check that everything works.
+
+## Submit your assignment
+When you have finished, and are satisfied with your assignment solutions, and this file knits without errors and the output looks the way you want, then you should upload both the .Rmd file and rendered (knitted) .html file to the assessment respective upload boxes in OL.

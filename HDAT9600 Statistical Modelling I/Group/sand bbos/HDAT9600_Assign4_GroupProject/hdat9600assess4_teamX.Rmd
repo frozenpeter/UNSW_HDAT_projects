@@ -1,0 +1,290 @@
+---
+title: "HDAT9600 Final Team Assignment"
+subtitle: "Please see course timetable / 'Announcements' for submission deadline"
+author: "insert your team name here"
+date: "insert date of completion here"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# leave this code here, but feel free to adjust the options or add some more
+# see the knitr documentation for details
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=8)
+
+## required packages for examples 
+libs <- c("eha", "stringi", "bshazard", "survminer")
+missing <- !libs %in% installed.packages()
+if (any(missing)) {
+  install.packages(libs[missing],repos="https://cloud.r-project.org")
+}
+
+library(boot)
+library(bshazard)
+library(car)
+library(caret)
+library(DescTools)
+library(eha)
+library(dplyr)
+library(flexsurv)
+library(ggplot2)
+library(ggplot2)
+library(glmnet)
+library(knitr)
+library(MASS)
+library(muhaz)
+library(pch)
+library(pROC)
+library(ROCR)
+library(stats)
+library(stringi)
+library(survminer)
+library(survival)
+library(tidyr)
+library(gridExtra)
+library(png)
+```
+
+
+## Accessing the Data
+**Note:** icu_patients_df1 is an imputed (i.e. missing values are 'derived') version of icu_patients_df0.  This assessment does not concern the methods used for imputation. You should use `icu_patients_df1` for all tasks unless it is specifically noted to use `icu_patients_df0`. 
+
+```{r}
+mydat <- file.path("C:/Users/froze/OneDrive/Documents/2.1 UNSW bioinfo/HDAT9600/Assignment/Group/HDAT9600_Assign4_GroupProject")
+icu_patients_df0 <- readRDS(file.path(mydat,"icu_patients_df0.rds"))
+icu_patients_df1 <- readRDS(file.path(mydat,"icu_patients_df1.rds"))
+#summary(icu_patients_df1) #useful for initial checks
+#str(icu_patients_df1) # Structure of the dataset
+#glimpse(icu_patients_df1) #quickly see the entirety of the data frame's structure and less likely to truncate
+
+# Function to calculate and print missing, NaN, infinite values, and unique patient counts
+analyze_data_issues <- function(df, df_name) {
+  # Calculate missing values
+  missing_values <- colSums(is.na(df))
+  missing_values <- missing_values[missing_values > 0]
+
+  # Calculate NaN and infinite values
+  nan_inf_values <- sapply(df, function(x) sum(is.nan(x) | is.infinite(x)))
+  nan_inf_values <- nan_inf_values[nan_inf_values > 0]
+
+  # Calculate unique patient counts
+  unique_patients <- length(unique(df$RecordID))
+
+  # Print the results
+  cat("\n---", df_name, "---\n")
+  cat("\nMissing Values:\n")
+  print(missing_values)
+  cat("\nNaN or Infinite Values:\n")
+  print(nan_inf_values)
+  cat("\nNumber of Unique Patients:\n")
+  print(unique_patients)
+}
+
+# Apply the function to both data frames
+analyze_data_issues(icu_patients_df0, "ICU Patients DF0")
+analyze_data_issues(icu_patients_df1, "ICU Patients DF1")
+```
+
+## Data Clean
+Step 1: check for NaN or infinite values and then handle missing data through exclusion or imputation.
+```{r Data Clean step 1}
+# Calculate the sum of NaN and infinite values for each specified model variable #df1 data does not has NaN or infinite values, thus skip this step
+nan_inf_counts_df0 <- sapply(icu_patients_df0, function(x) {
+  sum(is.nan(x) | is.infinite(x))  # Check for both NaN and infinite values
+})
+
+# Convert NaN and infinite values to NA across all columns
+icu_patients_df0[] <- lapply(icu_patients_df0, function(x) {
+  x[is.nan(x) | is.infinite(x)] <- NA
+  return(x)
+})
+
+# Print summary to verify changes or for debugging # Optional
+#nan_inf_counts_df0_after <- sapply(icu_patients_df0, function(x) {
+#  sum(is.nan(x) | is.infinite(x))  # Recheck for both NaN and infinite values
+#})
+#cat("\nnNaN or Infinite Values:\n")
+#print(nan_inf_counts_df0_after)
+```
+
+Step 2: Handling Missing Data
+```{r Data Clean step 2 for df0}
+# Initial type conversions and handling of illogical values
+icu_patients_df0_conv <- icu_patients_df0 %>%
+  mutate(
+    SAPS1 = if_else(SAPS1 < 0, NA_real_, as.integer(SAPS1)),
+    SOFA = if_else(SOFA < 0, NA_real_, as.integer(SOFA)),
+    Length_of_stay = if_else(Length_of_stay < 0, abs(Length_of_stay), Length_of_stay),
+    Age = as.integer(Age),
+    GCS_max = as.integer(GCS_max),
+    Gender = as.factor(Gender),
+    ICUType = as.factor(ICUType),
+    Status_Label = factor(Status, levels = c(FALSE, TRUE), labels = c("Survived", "Died")),
+    LR_in_hospital_death = factor(in_hospital_death, levels = c(0, 1), labels = c("Survived", "Died"))
+  )
+
+missing_threshold <- 0.3 # Set a threshold for maximum acceptable proportion of missing data
+# Calculate the proportion of missing data for each variable
+prop_missing_df0 <- colSums(is.na(icu_patients_df0_conv)) / nrow(icu_patients_df0_conv)
+vars_to_exclude_df0 <- names(prop_missing_df0[prop_missing_df0 > missing_threshold])
+cat("Variables should be excluded due to high missing data in df0:\n")
+print(vars_to_exclude_df0)
+
+# Make a copy of the data frame to clean # as we need to keep the massing values in df0 to do the comparison, no missing values Impute will be applied on df0 data
+icu_patients_df0_cleaned <- icu_patients_df0_conv
+
+# Variables intended for the model (these are get from following step, can be modified)
+model_vars_df0 <- c("Age", "SAPS1", "SOFA", "Albumin_max", "ALT_max", "AST_max", 
+                         "Bilirubin_max", "BUN_max", "Creatinine_max", "GCS_max", "GCS_min", 
+                         "HR_diff", "Lactate_max", "Na_diff", "NISysABP_diff", "PaO2_max", 
+                         "pH_diff", "Temp_diff", "Urine_max", "WBC_max", "ICUType")
+
+
+# Variables intended for the model and check for exclusion due to high missing data
+excluded_model_vars <- intersect(model_vars_df0, vars_to_exclude_df0)
+cat("\nVariables intended for the model have high missing data and will be excluded in df0:\n")
+print(excluded_model_vars)
+```
+```{r Data Clean step 2 for df1}
+# Initial type conversions and handling of illogical variables
+icu_patients_df1_conv <- icu_patients_df1 %>%
+  mutate(
+    SAPS1 = if_else(SAPS1 < 0, NA_real_, as.integer(SAPS1)),
+    SOFA = if_else(SOFA < 0, NA_real_, as.integer(SOFA)),
+    Length_of_stay = if_else(Length_of_stay < 0, abs(Length_of_stay), Length_of_stay),
+    Age = as.integer(Age),
+    GCS_max = as.integer(GCS_max),
+    Gender = as.factor(Gender),
+    ICUType = as.factor(ICUType),
+    Status_Label = factor(Status, levels = c(FALSE, TRUE), labels = c("Survived", "Died")),
+    LR_in_hospital_death = factor(in_hospital_death, levels = c(0, 1), labels = c("Survived", "Died"))
+  )
+
+
+# Set a threshold for maximum acceptable proportion of missing data
+missing_threshold <- 0.3
+# Calculate the proportion of missing data for each variable
+prop_missing <- colSums(is.na(icu_patients_df1_conv)) / nrow(icu_patients_df1_conv)
+# Identify variables to exclude based on the threshold
+vars_to_check <- setdiff(names(icu_patients_df1_conv), "Survival") # Exclude the 'Survival' variable from the evaluation for missing data
+vars_to_exclude_df1 <- names(prop_missing[vars_to_check][prop_missing[vars_to_check] > missing_threshold])
+cat("Variables to be excluded due to high missing data:\n")
+print(vars_to_exclude_df1)
+
+# Identify variables to impute
+vars_to_impute <- names(prop_missing[prop_missing <= missing_threshold & prop_missing > 0])
+# Make a copy of the data frame to clean
+icu_patients_df1_cleaned <- icu_patients_df1_conv
+# Impute missing values for selected variables using median
+for(var in vars_to_impute) {
+  icu_patients_df1_cleaned[[var]][is.na(icu_patients_df1_cleaned[[var]])] <- median(icu_patients_df1_cleaned[[var]], na.rm = TRUE)
+}
+# Now exclude the variables with too much missing data from the cleaned dataframe
+icu_patients_df1_cleaned <- icu_patients_df1_cleaned[ , !(names(icu_patients_df1_cleaned) %in% vars_to_exclude_df1)]
+
+# Check if there are any remaining missing values
+missing_values <- colSums(is.na(icu_patients_df1_cleaned))
+missing_values <- missing_values[missing_values > 0]
+cat("Remaining missing values in the cleaned data:\n")
+print(missing_values)
+
+# Print the number of observations after cleaning
+print(paste("Number of observations after cleaning:", nrow(icu_patients_df1_cleaned)))
+
+```
+## Aims of your project
+
+You have two analytic goals in this assignment. 
+1. The first goal (Task 1) is to build a model to PREDICT in-hospital death. The context for this is that the hospital management wishes to use this model to prioritise the allocation of resources with the overarching aim of improving patient survival.  
+2. The second goal (Task 2) is to try to understand and EXPLAIN how survival varies by `Age`. How does survival change with increasing Age? Are age-related survival differences explained solely by differing clinical characteristics of patients? 
+
+
+# Task 1
+
+### Part A: Exploratory data analysis
+
+Conduct a brief EDA for the dataset `icu_patients_df1`. One of your goals for this EDA should be to identify a sub-set of variables (approx 15-20 variables) that _may_ be useful predictors of survival and/or relevant to your analytical task. You may wish to firstly undertake a brief literature review to try to identify factors that may be important predictors of survival in an ICU. This doesn't need to be in-depth, but enough to get a basic idea of what the variables are measuring and which variables might, in theory, be most important. 
+
+For the 15-20 chosen variables, present enough information to: (i) explain why you selected these variables, based on a combination of your literature review and EDA, and (ii) Provide an overview of the variables and how they are related to `in-hospital death`. Present your summary using tables and/or plots with supporting commentary where relevant. 
+
+### Part B: Predictive logistic model
+
+Your aim is to build a model to PREDICT in-hospital death. In this task, you are required to develop a logistic regression model using the `icu_patients_df1` data set which adequately **predicts** the `in_hospital_death` variable as the outcome and utilises predictor variables from your chosen subset. You should fit a series of models, evaluating each one, before you present your final model. Your final model should **not** include all the predictor variables, just a small selection of them, which you have selected based on statistical significance and/or background knowledge. Remember, your aim is prediction, but you should also consider generalisability of the model, so we are aiming for parsimony. Aim for between five and ten predictor variables (slightly more or fewer is OK). You should assess each model you consider for goodness of fit and other relevant statistics to help you choose between them. For your final model, present a set of relevant diagnostic statistics and/or charts and comment on them. 
+
+Finally, re-fit your final model to the unimputed data frame (`icu_patients_df0.rds`) and comment on any differences you find compared to the same model fitted to the imputed data. 
+
+
+**Create your response to task 1 here, as a mixture of embedded (`knitr`) R code and any resulting outputs, and explanatory or commentary text. Add code chunks as you see fit and choose whether you wish for the code and or results to be displayed in the final html document.** 
+
+```{r}
+
+
+
+```
+
+
+
+
+# Task 2
+
+### Part A: Exploratory Data Analysis
+
+The goal of this EDA is similar to Task 1 and you may choose to use the same sub-set of predictors if they are relevant and appropriate to the analysis for Task 2. You may also choose to select a different sub-set if you wish. Justify whichever approach you choose.
+
+Present enough information to: (i) explain why you selected these variables, and (ii) Provide an overview of the variables and how they are related to survival. Present your summary using tables and/or plots with supporting commentary where relevant.
+
+
+### Part B: Explanatory survival model
+
+Your aim is to try to understand and EXPLAIN how survival time varies by `Age`. How does survival change with increasing Age?  Can any age-related differences in survival time be explained by differing clinical presentations of older patients?
+
+In this task, you are required to develop a Cox proportional hazards survival model using the `icu_patients_df1` data set which adequately **explains** the length of survival indicated by the `Days` variable, with censoring as indicated by the `Status` variable.  You should fit a univariable model examining the relationship between Age and survival. You should then also fit another one or two multivariable models, to examine the extent that survival is explained by other variables in the dataset and whether age is independently related to survival after controlling for other factors.  Your final model should **not** include all the predictor variables, just a relevant subset of them, which you have selected based on statistical significance and/or background knowledge.  It is perfectly acceptable to include predictor variables in your final model which are not statistically significant, as long as you justify their inclusion on medical or physiological grounds (you will not be marked down if your medical justification is not exactly correct, but do you best). You should assess each model you consider for goodness of fit and other relevant statistics, and you should assess your final model for violations of assumptions and perform other diagnostics which you think are relevant (and modify the model if indicated, or at least comment on the possible impact of what your diagnostics show). 
+
+Finally, re-fit your final model to the unimputed data frame (`icu_patients_df0.rds`) and comment on any differences you find.
+
+**Create your response to task 2 here, as a mixture of embedded (`knitr`) R code and any resulting outputs, and explanatory or commentary text. Add code chunks as you see fit and choose whether you wish for the code and or results to be displayed in the final html document.** 
+
+```{r}
+
+```
+
+
+
+
+### Hints
+
+1. Make sure you justify your choice of potential predictors. This could be based on a range of different factors, eg. review of the literature, data quality assessment, strong association with the outcome. 
+
+2. Present the story of your analysis by including explanation and commentary supported by well-presented plots and/or tables. 
+
+3. Make sure all plots and tables are clearly presented with titles and labels as needed. Pay attention to sizing of plots and make sure you check how the rendered result appears. 
+
+4. Clearly define your starting population for the analysis and describe the characteristics of your outcome variable. 
+
+5. Present summaries of appropriate univariate models examining the unadjusted relationship between each predictor and the outcome. 
+
+6. Fit an appropriate series of multivariable regression models, justifying your approach. Assess each model you consider for goodness of fit and other relevant statistics.
+
+7. Present your final model for each task and justify why this model is the most appropriate to answer the analytical question(s). Your final model(s) should **not** include all the predictor variables, just a small subset of them, which you have selected based on statistical significance, background knowledge and relevance to achieving the analytical aim.
+
+8. For your _final model_, present a set of diagnostic statistics and/or charts and comment on them.
+
+9. For each task make sure you write a paragraph or two summarising the most important findings of your analysis. Include reference to the most important results from the statistical output, and a simple clinical interpretation. Make sure your summary of findings addresses the main analytical aim(s) for each task. 
+
+
+
+
+## Save, knit and submit
+
+**Reminder**: don't forget to save this file, to knit it to check that everything works and appears in the right format, and then submit TWO documents via the drop box in OpenLearning (.rmd AND .html).
+
+
+### Problems?
+
+If you encounter problems with any part of the process described above, please contact the course convenor via OpenLearning as soon as possible so that the issues can be resolved in good time, and well before the assessment is due.
+
+
+### Additional Information
+
+The instructions are deliberately less prescriptive than the individual assessments to allow you some latitude in what you do and how you go about the task. However, to complete the tasks, you only need to replicate or repeat the steps covered in the course - you do not need to attempt any types of analyses that have not been covered. Refer to the marking rubric for how marks will be awarded.   
+
+Note also that with respect to the model fitting, there are no **right** or **wrong** answers when it comes to variable selection and other aspects of model specification. Deep understanding of the underlying medical concepts which govern patient treatment and outcomes in ICUs is not required or assumed, although you should try to gain some understanding of each variable using the links provided. You will not be marked down if your medical justifications are not exactly correct or complete, but do you best, and don't hesitate to seek help from the course convenor.   

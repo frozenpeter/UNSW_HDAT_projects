@@ -1,0 +1,38 @@
+Dear Heidi,
+I am stuck in Part b of Q2 and would like to seek your advice. After creating the 2 new variables ‘rotdiff’ and ‘flexdiff’, I failed to output ‘rotdiff’ and ’flexdiff’ in treat of ‘grp’ while it is ok for control of ‘grp’. I tried with different functions, e.g. summary(treatment_group$flexdiff) while summary(control_group$flexdiff) can be displayed, histogram and plot have the same problem. I checked the data of rotdiff in hips2.csv, the data in ‘treatment group’ is ‘proper’.
+hips2$flexdiff <- hips2$faft - hips2$fbef
+treatment_group <- subset(hips2, grp == "treat")
+summary(treatment_group$flexdiff)
+…..Nothing display…….
+What is the problem of my work?
+
+Hi Cheri, You look like you are on the right track here. It works ok when I paste your code into my document and I can run summary() and get sensible results. So you may want to check your .rmd settings for the chunk if nothing is outputting (see slides from last week re. how to control what gets output). Also check that you have run any previous required code chunks. The other thing to note with running this code in a .rmd file is that you may not see all the results clearly until you knit the document.
+Try running the code outside of the .rmd file (eg. just in a normal r script in RStudio) and see whether it works. If so then that tells you it is a display problem.
+
+Dear Heidi, it works! Thank you~
+My problem is i put " treatment_group <- subset(hips2, grp == "treat") " in part a so when I run part b, it doesn't proceed the code in part a and therefore the 'rotdiff' was NULL when checking str(). I thought "treatment_group <- subset(hips2, grp == "treat")" has been run previously and it is included. So the lesson learnt is we need to run the whole piece of Q2 codes everytime when adding new codes. Haha, thanks again.
+
+
+And for Part c of Q2, is it the case that we don't need to write codes for comparison of the lm? What we need to do is just to write our conclusions.
+
+Yes Correct - you don't need to include code here. Just think about what the question is asking and provide your recommended approach with a justification for why that is the most appropriate approach.
+
+
+亲爱的海蒂，
+我陷入了 Q2 的 b 部分，想寻求您的建议。 创建两个新变量“rotdiff”和“flexdiff”后，我在处理“grp”时无法输出“rotdiff”和“flexdiff”，而控制“grp”却可以。 我尝试了不同的功能，例如 摘要(treatment_group$flexdiff) 虽然可以显示summary(control_group$flexdiff)，但直方图和绘图也有同样的问题。 我检查了hips2.csv中rotdiff的数据，“治疗组”中的数据是“正确的”。
+hips2$flexdiff <- hips2$faft - hips2$fbef
+Treatment_group <- 子集(hips2, grp == "治疗")
+摘要（治疗组$flexdiff）
+……没有显示……
+我的工作有什么问题吗？
+
+嗨，Cheri，您看起来走在正确的道路上。 当我将您的代码粘贴到我的文档中时，它工作正常，我可以运行summary()并获得合理的结果。 因此，如果没有任何输出，您可能需要检查该块的 .rmd 设置（请参阅上周关于如何控制输出内容的幻灯片）。 另请检查您是否已运行任何先前所需的代码块。 在 .rmd 文件中运行此代码时需要注意的另一件事是，在编织文档之前，您可能无法清楚地看到所有结果。
+尝试在 .rmd 文件之外运行代码（例如，在 RStudio 中的普通 r 脚本中）并查看它是否有效。 如果是这样那就说明是显示问题。
+
+亲爱的海蒂，它有效！ 谢谢~
+我的问题是我把“treatment_group <-subset(hips2, grp == "treat")”放在a部分中，所以当我运行b部分时，它不会继续a部分中的代码，因此当'rotdiff'为NULL时 检查 str()。 我认为“treatment_group <-subset(hips2, grp == "treat")”之前已经运行过并且它被包含在内。 所以吸取的教训是，每次添加新代码时，我们都需要运行整段Q2代码。 哈哈，再次感谢。
+
+
+那么对于Q2的c部分，是不是我们不需要编写比较lm的代码呢？ 我们需要做的只是写下我们的结论。
+
+是的，正确 - 您不需要在此处包含代码。 只需思考问题所问的内容，并提供您推荐的方法，并说明为什么这是最合适的方法。

@@ -1,0 +1,581 @@
+---
+title: "Exploratory Data Analysis of Synthetic ART-in-HIV Dataset"
+author: "Zhenyu_Zhang(z5037788)"
+date: "2024-06-30"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# install.packages("devtools")
+# devtools::install_github("thomasp85/patchwork")1
+# Load necessary libraries
+library(tidyverse)
+library(knitr)
+library(ggplot2)
+library(patchwork)
+library(scales)
+library(naniar)
+library(ggridges)
+```
+
+```{r load locol-data, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+# Load the dataset
+dataset_locol <- read_csv("ZZZ_C001_FakeHIV.csv", show_col_types = FALSE)
+
+# Display the first few rows of the dataset
+head(dataset_locol)
+
+# Use `spec()` to retrieve the full column specification for this data
+spec(dataset_locol)
+```
+```{r load web data, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+# Load the dataset directly from the URL
+dataset_url <- "https://figshare.com/ndownloader/files/35249488"
+raw_dataset <- read_csv(dataset_url, show_col_types = FALSE)
+```
+
+```{r load-data, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+# Display the first few rows of the dataset
+head(raw_dataset)
+
+# Display the column specification
+spec(raw_dataset)
+```
+```{r simple initial exploratory, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+# Summary of the dataset
+summary(raw_dataset)
+
+# Structure of the dataset
+str(raw_dataset)
+```
+
+```{r copy and chcek, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+# Create a copy of the dataset for transformations
+dataset <- raw_dataset
+
+# Print column names to check any issues
+# print(colnames(dataset))
+```
+
+
+```{r clean and transform data, echo=FALSE, results='hide', warning=FALSE, message=FALSE}
+# Rename columns to remove spaces and make them more readable
+colnames(dataset) <- c("Index", "ViralLoad", "CD4Count", "RelCD4Count", "Gender", "Ethnic", "BaseDrugCombo",
+                       "CompINI", "CompNNRTI", "ExtraPI", "ExtraPkEn", "ViralLoad_M", "CD4Count_M", 
+                       "Drug_M", "PatientID", "Timepoints")
+
+# Drop the Index column as it is not needed (as step 8 mentioned 16 columns, Keep the index column)
+# dataset <- dataset %>% select(-Index)
+
+# Convert categorical columns to factors with appropriate labels
+dataset <- dataset %>%
+  mutate(Gender = factor(Gender, levels = c(1, 2), labels = c("Male", "Female")),
+         Ethnic = factor(Ethnic, levels = c(1, 2, 3, 4), labels = c("Asian", "Afro", "Caucasian", "Other")),
+         BaseDrugCombo = factor(BaseDrugCombo, levels = 0:5, labels = c("FTC + TDF", "3TC + ABC", "FTC + TAF", 
+                                                                         "DRV + FTC + TDF", "FTC + RTVB + TDF", "Other")),
+         CompINI = factor(CompINI, levels = 0:3, labels = c("DTG", "RAL", "EVG", "Not Applied")),
+         CompNNRTI = factor(CompNNRTI, levels = 0:3, labels = c("NVP", "EFV", "RPV", "Not Applied")),
+         ExtraPI = factor(ExtraPI, levels = 0:5, labels = c("DRV", "RTVB", "LPV", "RTV", "ATV", "Not Applied")),
+         ExtraPkEn = factor(ExtraPkEn, levels = c(0, 1), labels = c("False", "True")),
+         ViralLoad_M = factor(ViralLoad_M, levels = c(0, 1), labels = c("False", "True")),
+         CD4Count_M = factor(CD4Count_M, levels = c(0, 1), labels = c("False", "True")),
+         Drug_M = factor(Drug_M, levels = c(0, 1), labels = c("False", "True")))
+
+# Display the first few rows of the cleaned dataset
+head(dataset)
+
+```
+## Data Dictionary
+```{r data-dictionary, echo=FALSE, message=TRUE}
+# Define the data dictionary
+data_dict <- tibble(
+  Column = colnames(dataset),
+  Description = c(
+    "Row index",
+    "Viral load measurement",
+    "CD4 count measurement",
+    "Relative CD4 count",
+    "Gender of the patient",
+    "Ethnicity of the patient",
+    "Base drug combination",
+    "Complementary integrase inhibitor",
+    "Complementary NNRTI",
+    "Extra protease inhibitor",
+    "Extra PK enhancer",
+    "Viral load measurement flag",
+    "CD4 count measurement flag",
+    "Drug measurement flag",
+    "Patient identifier",
+    "Time points"
+  ),
+  DataType = sapply(dataset, class),
+  Unit = c(
+    "None",
+    "copies/mL",
+    "cells/µL",
+    "cells/µL",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None",
+    "None"
+  ),
+  ValidValues = c(
+    "Numerical Index",
+    "Numerical",
+    "Numerical",
+    "Numerical",
+    "Male, Female",
+    "Afro, Caucasian, Other",
+    "FTC + TDF, 3TC + ABC, FTC + TAF, DRV + FTC + TDF, FTC + RTVB + TDF, Other",
+    "DTG, RAL, EVG, Not Applied",
+    "NVP, EFV, RPV, Not Applied",
+    "DRV, RTVB, LPV, RTV, ATV, Not Applied",
+    "False, True",
+    "False, True",
+    "False, True",
+    "Arbitrary Identifier",
+    "Numerical Time Points",
+    "None"  # Add placeholder for the Index column
+  )
+)
+
+# Make the data dictionary as a table
+kable(data_dict, col.names = c("Column Name", "Description", "Data Type", "Unit", "Valid Values"), caption = "Synthetic ART-in-HIV Dataset")
+
+# Print the number of rows in the dataset
+#num_rows <- nrow(dataset)
+#cat("The dataset contains: ", num_rows, "rows.")
+```
+
+```{r Unique Patient Data, echo=FALSE, results='hide', message=FALSE}
+# Check for consistency of Gender and Ethnicity for each PatientID
+consistency_check <- dataset %>%
+  group_by(PatientID) %>%
+  summarize(
+    Gender_consistent = n_distinct(Gender) == 1,
+    Ethnic_consistent = n_distinct(Ethnic) == 1
+  )
+
+# Display any PatientIDs with inconsistencies
+inconsistent_patients <- consistency_check %>%
+  filter(!Gender_consistent | !Ethnic_consistent)
+
+inconsistent_patients
+
+# Create a unique patient dataset by selecting the first entry for each PatientID
+unique_patients <- dataset %>% 
+  group_by(PatientID) %>% 
+  slice(1) %>% 
+  ungroup()
+
+# Check the summary to verify the unique patient dataset
+summary(unique_patients)
+
+# Table of counts for each unique Timepoint value
+timepoints_table <- table(dataset$Timepoints)
+timepoints_table
+
+```
+
+The dataset contains `r nrow(dataset)` rows time-points observations from `r nrow(unique_patients)` unique patients. In addition, there is no missing data in the dataset.
+
+```{r Checking Missing Data , echo=FALSE, results='hide'}
+# Identify missing data in the dataset
+missing_data_summary <- dataset %>%
+  select(-Index, -Gender, -Ethnic, -BaseDrugCombo, -CompINI, -CompNNRTI, -ExtraPI, -ExtraPkEn, -ViralLoad_M, -CD4Count_M, -Drug_M) %>%
+  pivot_longer(cols = -c(PatientID, Timepoints), names_to = "Variable", values_to = "Value") %>%
+  filter(is.na(Value)) %>%
+  select(PatientID, Timepoints, Variable)
+
+# Display the summary of missing data
+if (nrow(missing_data_summary) == 0) {
+  cat ("There is no missing data in the dataset.")
+} else {
+  kable(missing_data_summary, col.names = c("Patient ID", "Timepoint", "Variable"), caption = "Summary of Missing Data")
+}
+```
+
+
+## Gender and Ethnicity Distribution
+```{r data visualization_1, echo=FALSE, message=FALSE}
+# Calculate the total count for each category
+total_count_gender <- nrow(unique_patients)
+total_count_ethnic <- nrow(unique_patients)
+max_count_gender <- max(table(unique_patients $Gender))
+max_count_ethnic <- max(table(unique_patients $Ethnic))
+
+# Sample plot for Gender
+p1 <- ggplot(unique_patients, aes(x=Gender)) +
+  geom_bar(fill="orange", color="black") +
+  geom_text(stat='count', aes(label=paste0(..count.., " (", round(..count../total_count_gender*100, 3), "%)")), vjust=-0.5, size=3.5) +
+  labs(title="Gender Distribution", y="Count") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank()) +
+  ylim(0, max_count_gender * 1.2) # Increase y-axis limit based on max count
+
+# Sample plot for Ethnicity
+p2 <- ggplot(unique_patients, aes(x=Ethnic)) +
+  geom_bar(fill="brown", color="black") +
+  geom_text(stat='count', aes(label=paste0(..count.., " (", round(..count../total_count_ethnic*100, 3), "%)")), vjust=-0.5, size=3.5) +
+  labs(title="Ethnicity Distribution", y="Count") +
+  theme_minimal() +
+  theme(axis.title = element_blank()) +
+  ylim(0, max_count_ethnic * 1.2)
+
+
+# Combine plots using patchwork and adjust layout
+combined_plot <- p1 | p2
+combined_plot
+
+```
+
+## Aggregate Viral Load and CD4 Count Over Time
+```{r data ggregate of viral load and CD4 situation, echo=FALSE, message=FALSE}
+# Calculate mean and standard deviation of patients viral load and CD4 situation for each time point
+aggregated_data <- dataset %>%
+  group_by(Timepoints) %>%
+  summarise(
+    mean_ViralLoad = mean(ViralLoad, na.rm = TRUE),
+    sd_ViralLoad = sd(ViralLoad, na.rm = TRUE),
+    mean_CD4Count = mean(CD4Count, na.rm = TRUE),
+    sd_CD4Count = sd(CD4Count, na.rm = TRUE),
+    mean_RelCD4Count = mean(RelCD4Count, na.rm = TRUE),
+    sd_RelCD4Count = sd(RelCD4Count, na.rm = TRUE)
+  )
+```
+
+```{r data visualization_2, echo=FALSE, message=FALSE, fig.height=10, fig.width=8}
+# Line plot for Viral Load
+p_viral <- ggplot(aggregated_data, aes(x=Timepoints)) +
+  geom_line(aes(y=mean_ViralLoad), color="#2E53BF") +
+  geom_ribbon(aes(ymin=mean_ViralLoad-sd_ViralLoad, ymax=mean_ViralLoad+sd_ViralLoad), alpha=0.2, fill="#2E53BF") +
+  labs(title="Viral Load Measurement Over Time", y="copies/mL") +
+  theme_minimal()+
+  theme(axis.title.x = element_blank())
+
+# Line plot for CD4 Count
+p_cd4 <- ggplot(aggregated_data, aes(x=Timepoints)) +
+  geom_line(aes(y=mean_CD4Count), color="#1D9A6C") +
+  geom_ribbon(aes(ymin=mean_CD4Count-sd_CD4Count, ymax=mean_CD4Count+sd_CD4Count), alpha=0.2, fill="#1D9A6C") +
+  labs(title="CD4 Count Measurement Over Time", y="cells/µL") +
+  theme_minimal()+
+  theme(axis.title.x = element_blank())
+
+# Line plot for Relative CD4 Count
+p_rel_cd4 <- ggplot(aggregated_data, aes(x=Timepoints)) +
+  geom_line(aes(y=mean_RelCD4Count), color="#AE3540") +
+  geom_ribbon(aes(ymin=mean_RelCD4Count-sd_RelCD4Count, ymax=mean_RelCD4Count+sd_RelCD4Count), alpha=0.2, fill="#AE3540") +
+  labs(title="Relative CD4 Count Measurement Over Time", y="cells/µL", x="Timepoints") +
+  theme_minimal()
+
+# Combine plots using patchwork
+combined_time_series_plot <- p_viral / p_cd4 / p_rel_cd4 +
+  plot_layout(heights = c(1, 1, 1)) # Adjust the heights to balance the plots
+
+combined_time_series_plot
+
+```
+
+## Histograms of Viral Load and CD4 Count
+```{r data visualization_3, echo=FALSE, message=FALSE, fig.height=10, fig.width=8}
+# Histogram for Viral Load of all patient of all time
+p_viral_hist <- ggplot(dataset, aes(x=ViralLoad)) +
+  geom_histogram(binwidth = 500, fill="#003D7D", color="black", alpha=0.2) +
+  labs(title="Histogram of Viral Load", x="copies/mL", y="Frequency") +
+  theme_minimal()
+
+# Histogram for CD4 Count
+p_cd4_hist <- ggplot(dataset, aes(x=CD4Count)) +
+  geom_histogram(binwidth = 100, fill="#003D7D", color="black", alpha=0.2) +
+  labs(title="Histogram of CD4 Count", x="cells/µL", y="Frequency") +
+  theme_minimal()
+
+# Histogram for Relative CD4 Count
+p_rel_cd4_hist <- ggplot(dataset, aes(x=RelCD4Count)) +
+  geom_histogram(binwidth = 2, fill="#003D7D", color="black", alpha=0.2) +
+  labs(title="Histogram of Relative CD4 Count", x="cells/µL", y="Frequency") +
+  theme_minimal()
+
+# Combine histograms using patchwork
+combined_histograms <- p_viral_hist / p_cd4_hist / p_rel_cd4_hist +
+  plot_layout(heights = c(1, 1, 1)) # Adjust the heights to balance the plots
+
+combined_histograms
+
+```
+
+## Log-transformed Histograms of Viral Load and CD4 Count
+```{r data visualization_3_log, echo=FALSE, message=FALSE, fig.height=10, fig.width=8}
+# Log-transformed Histogram for Viral Load
+p_viral_hist_log <- ggplot(dataset, aes(x=ViralLoad)) +
+  geom_histogram(binwidth = 0.1, fill="#003D7D", color="black", alpha=0.2) +
+  labs(title="Log-transformed Histogram of Viral Load", x="Log(copies/mL)", y="Frequency") +
+  theme_minimal() +
+  scale_x_log10()
+
+# Log-transformed Histogram for CD4 Count
+p_cd4_hist_log <- ggplot(dataset, aes(x=CD4Count)) +
+  geom_histogram(binwidth = 0.05, fill="#003D7D", color="black", alpha=0.2) +
+  labs(title="Log-transformed Histogram of CD4 Count", x="Log(cells/µL)", y="Frequency") +
+  theme_minimal() +
+  scale_x_log10()
+
+# Log-transformed Histogram for Relative CD4 Count
+p_rel_cd4_hist_log <- ggplot(dataset, aes(x=RelCD4Count)) +
+  geom_histogram(binwidth = 0.05, fill="#003D7D", color="black", alpha=0.2) +
+  labs(title="Log-transformed Histogram of Relative CD4 Count", x="Log(cells/µL)", y="Frequency") +
+  theme_minimal() +
+  scale_x_log10()
+
+combined_histograms_log <- p_viral_hist_log /  p_cd4_hist_log / p_rel_cd4_hist_log +
+  plot_layout(nrow = 3, heights = c(4, 4, 4)) # Adjust the heights to balance the plots
+
+combined_histograms_log
+```
+
+## Distribution of Base Drug Combination Usage
+```{r data visualization_4, echo=FALSE, message=FALSE}
+# Calculate the proportions for Base Drug Combination
+drug_combo_counts <- dataset %>% 
+  count(BaseDrugCombo) %>% 
+  mutate(proportion = n / sum(n) * 100)
+
+
+# aes(label=paste0(..count.., " (", round(..count../total_count_basedrugcombo*100, 1), "%)")) if want to show the count number
+p_drug_combo <- ggplot(drug_combo_counts, aes(x=proportion, y=fct_reorder(BaseDrugCombo, proportion))) + # 'fct_reorder' function ensures the factor levels are in the order
+  geom_bar(stat='identity', fill="#1D9A6C") +
+  geom_text(aes(label=paste0(round(proportion, 2), "%")), hjust=-0.1, size=3.5) +
+  labs(title="Distribution of Base Drug Combination Usage", x="Percentage") +
+  theme_minimal() +
+  scale_x_continuous(labels = percent_format(scale = 1)) + # Format x-axis as percentage
+  theme(axis.title.y = element_blank()) +
+  xlim(0, max(drug_combo_counts$proportion) * 1.2) # Adjust x-axis limit to fit labels
+
+p_drug_combo
+```
+
+## Distribution of Complementary INI and NNRTI Usage
+```{r data visualization_5, echo=FALSE, fig.height=8, fig.width=8}
+# Calculate the proportions for Complementary INI & Complementary NNRTI
+comp_ini_counts <- dataset %>% 
+  count(CompINI) %>% 
+  mutate(proportion = n / sum(n) * 100)
+
+comp_nnrt_counts <- dataset %>% 
+  count(CompNNRTI) %>% 
+  mutate(proportion = n / sum(n) * 100)
+
+# Bar chart for Complementary INI (CompINI)
+p_comp_ini <- ggplot(comp_ini_counts, aes(x=proportion, y=fct_reorder(CompINI, proportion))) + 
+  geom_bar(stat='identity', fill="#2C3E50") +
+  geom_text(aes(label=paste0(round(proportion, 2), "%")), hjust=-0.1, size=3.5) +
+  labs(title="Distribution of Complementary INI Usage", x="Percentage") +
+  theme_minimal() +
+  scale_x_continuous(labels = percent_format(scale = 1)) +
+  theme(axis.title.y = element_blank()) +
+  xlim(0, max(comp_ini_counts$proportion) * 1.2)
+
+
+
+# Bar chart for Complementary NNRTI (CompNNRTI)
+p_comp_nnrt <- ggplot(comp_nnrt_counts, aes(x=proportion, y=fct_reorder(CompNNRTI, proportion))) + 
+  geom_bar(stat='identity', fill="#34495E") +
+  geom_text(aes(label=paste0(round(proportion, 2), "%")), hjust=-0.1, size=3.5) +
+  labs(title="Distribution of Complementary NNRTI Usage", x="Percentage") +
+  theme_minimal() +
+  scale_x_continuous(labels = percent_format(scale = 1)) +
+  theme(axis.title.y = element_blank()) +
+  xlim(0, max(comp_nnrt_counts$proportion) * 1.2)
+
+# Combine all categorical plots using patchwork with adjusted heights
+combined_categorical_plots <- (p_comp_ini + p_comp_nnrt ) +
+  plot_layout(ncol = 1, heights = c(1, 1)) # Adjust the heights to balance the plots
+
+combined_categorical_plots
+
+```
+
+
+## Distribution of Extra PI and Extra pk-En Usage
+```{r data visualization_6, echo=FALSE, fig.height=6, fig.width=8}
+# Calculate the proportions for Extra PI & Extra pk-En
+extra_pi_counts <- dataset %>% 
+  count(ExtraPI) %>% 
+  mutate(proportion = n / sum(n) * 100)
+
+extra_pk_en_counts <- dataset %>% 
+  count(ExtraPkEn) %>% 
+  mutate(proportion = n / sum(n) * 100)
+
+# Bar chart for Extra PI (ExtraPI)
+p_extra_pi <- ggplot(extra_pi_counts, aes(x=proportion, y=fct_reorder(ExtraPI, proportion))) + 
+  geom_bar(stat='identity', fill="#85C1F6") +
+  geom_text(aes(label=paste0(round(proportion, 2), "%")), hjust=-0.1, size=3.5) +
+  labs(title="Distribution of Extra PI Usage", x="Percentage") +
+  theme_minimal() +
+  scale_x_continuous(labels = percent_format(scale = 1)) +
+  theme(axis.title.y = element_blank()) +
+  xlim(0, max(extra_pi_counts$proportion) * 1.2)
+
+
+
+# Bar chart for Extra pk-En (ExtraPkEn)
+p_extra_pk_en <- ggplot(extra_pk_en_counts, aes(x=proportion, y=fct_reorder(ExtraPkEn, proportion))) + 
+  geom_bar(stat='identity', fill="#85C1F6") +
+  geom_text(aes(label=paste0(round(proportion, 2), "%")), hjust=-0.1, size=3.5) +
+  labs(title="Distribution of Extra pk-En Usage", x="Percentage") +
+  theme_minimal() +
+  scale_x_continuous(labels = percent_format(scale = 1)) +
+  theme(axis.title.y = element_blank()) +
+  xlim(0, max(extra_pk_en_counts$proportion) * 1.2)
+
+# Combine all categorical plots using patchwork with adjusted heights
+combined_categorical_plots <- (p_extra_pi + p_extra_pk_en) +
+  plot_layout(ncol = 1, heights = c(3, 1)) # Adjust the heights to balance the plots
+
+combined_categorical_plots
+
+
+```
+
+## CD4 Count Measurement and Drug Recorded Distribution
+```{r data visualization_7, echo=FALSE, fig.height=8, fig.width=8}
+# Calculate the maximum count for setting y-axis limits dynamically
+total_count_cd4count_m <- sum(table(dataset$CD4Count_M))
+total_count_drug_m <- sum(table(dataset$Drug_M))
+
+# Bar chart for CD4 Count Measurement (CD4Count_M)
+p_cd4_m <- ggplot(dataset, aes(x=CD4Count_M)) +
+  geom_bar(fill="skyblue", color="black", alpha=0.7) +
+  geom_text(stat='count', aes(label=paste0(..count.., " (", round(..count../total_count_cd4count_m*100, 2), "%)")), vjust=1.5, hjust=0.5, size=3.5, color="black") +
+  labs(title="CD4 Count Measurement Distribution", x="CD4 Count Measurement", y="Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(vjust=0.5, hjust=1))
+
+# Bar chart for Drug Recorded (Drug_M)
+p_drug_m <- ggplot(dataset, aes(x=Drug_M)) +
+  geom_bar(fill="pink", color="black", alpha=0.7) +
+  geom_text(stat='count', aes(label=paste0(..count.., " (", round(..count../total_count_drug_m*100, 2), "%)")), vjust=1.5, hjust=0.5, size=3.5, color="black") +
+  labs(title="Drug Recorded Distribution", x="Drug Recorded", y="Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(vjust=0.5, hjust=1))
+
+# Combine bar charts using patchwork
+combined_categorical_plots <- p_cd4_m / p_drug_m +
+  plot_layout(heights = c(1, 1)) # Adjust the heights to balance the plots
+
+combined_categorical_plots
+
+```
+
+
+```{r Checking Consistency of Attributes , echo=FALSE, results='hide'}
+# Check Consistency of All Attributes for Each Patient
+consistency_check <- dataset %>%
+  group_by(PatientID) %>%
+  summarise(across(-c(Index, ViralLoad, CD4Count, RelCD4Count, ViralLoad_M, CD4Count_M, Drug_M, Timepoints), ~ n_distinct(.) == 1))
+
+# Display any PatientIDs with Inconsistencies
+inconsistent_patients <- consistency_check %>%
+  filter_if(is.logical, any_vars(. == FALSE))
+
+inconsistent_patients
+
+```
+
+## Ridge plot for Viral Load
+```{r data visualization_8 , echo=FALSE, fig.height=20, fig.width=8}
+# Ridge plot for Viral Load
+p_ridge_vl <- ggplot(dataset, aes(x = ViralLoad, y = as.factor(Timepoints))) +
+  geom_density_ridges(fill = "#003D7D", alpha = 0.5) +
+  labs(title = "Distribution of Viral Load Across Time Points", x = "Log Viral Load (copies/mL)", y = "Timepoints") +
+  theme_minimal() +
+  scale_x_log10()
+
+p_ridge_vl
+
+```
+
+## Ridge plot for CD4 Count
+```{r data visualization_9, echo=FALSE, fig.height=20, fig.width=8}
+# Ridge plot for CD4 Count
+p_ridge_cd4 <- ggplot(dataset, aes(x = CD4Count, y = as.factor(Timepoints))) +
+  geom_density_ridges(fill = "#003D7D", alpha = 0.5) +
+  labs(title = "Distribution of CD4 Count Across Time Points", x = "Log CD4 Count (cells/µL)", y = "Timepoints") +
+  theme_minimal() +
+  scale_x_log10()
+
+p_ridge_cd4
+```
+
+## Ridge plot for Relative CD4 Count
+```{r data visualization_10, echo=FALSE, fig.height=20, fig.width=8}
+# Ridge plot for Relative CD4 Count
+p_ridge_rel_cd4 <- ggplot(dataset, aes(x = RelCD4Count, y = as.factor(Timepoints))) +
+  geom_density_ridges(fill = "#003D7D", alpha = 0.5) +
+  labs(title = "Distribution of Relative CD4 Count Across Time Points", x = "Log Relative CD4 Count (cells/µL)", y = "Timepoints") +
+  theme_minimal() +
+  scale_x_log10()
+
+p_ridge_cd4
+```
+
+
+```{r data visualization_11, echo=FALSE, fig.height=8, fig.width=8}
+# Summarize the counts of each drug combination for each time point
+drug_density <- dataset %>%
+  group_by(BaseDrugCombo, Timepoints) %>%
+  summarise(Count = n()) %>%
+  ungroup()
+
+# Create ridge plots for each drug combination usage
+p_ridge_drug <- ggplot(drug_density, aes(x = Timepoints, y = BaseDrugCombo, height = Count, group = BaseDrugCombo)) +
+  geom_density_ridges(stat = "identity", scale = 0.9, fill = "#003D7D", alpha = 0.5) +
+  labs(title = "Distribution of Each Drug Combination Usage Over Time", x = "Timepoints", y = "Base Drug Combination") +
+  theme_minimal()
+
+p_ridge_drug
+
+```
+
+
+
+```{r data visualization_12, echo=FALSE, fig.height=9, fig.width=12}
+total_counts <- dataset %>%
+  group_by(Timepoints) %>%
+  summarise(total = n())
+
+# Calculate the count of each drug combination for each time point
+drug_density <- dataset %>%
+  group_by(BaseDrugCombo, Timepoints) %>%
+  summarise(Count = n()) %>%
+  ungroup() %>%
+  left_join(total_counts, by = "Timepoints") %>%
+  mutate(Proportion = Count / total * 100)
+
+# Reorder the BaseDrugCombo factor based on the overall proportion
+drug_density$BaseDrugCombo <- factor(drug_density$BaseDrugCombo, 
+                                     levels = drug_combo_counts$BaseDrugCombo[order(-drug_combo_counts$proportion)])
+
+# Create ridge plots for each drug combination usage with different colors and correct proportions
+p_ridge_drug <- ggplot(drug_density, aes(x = Timepoints, y = Proportion, fill = BaseDrugCombo, group = BaseDrugCombo)) +
+  geom_area(position = "identity", alpha = 0.3) +  # Adjust transparency here
+  geom_line(aes(color = BaseDrugCombo), size = 0.3) +  # Add black line
+  scale_fill_brewer(palette = "Set3") +
+  scale_color_brewer(palette = "Set3") +  # Use the same palette for lines
+  labs(title = "Distribution of Each Drug Combination Usage Over Time", x = "Timepoints", y = "Proportion (%)") +
+  theme_minimal()
+
+p_ridge_drug
+```

@@ -1,0 +1,255 @@
+---
+title: "assignment_3"
+author: "Zhenyu Zhang (z5037788)"
+format: html
+execute:
+  echo: false
+  warning: false
+  error: false
+runtime: shiny
+---
+
+### Introduction
+
+The dataset used in this assignment is a retrospective heart failure dataset using electronic health data collected from patients who were admitted to Zigong Fourth People’s Hospital in Sichuan, China between December 2016 and June 2019. The dataset includes 168 variables for 2,008 patients with heart failure. Data on subsequent hospital admissions and mortality were obtained at a mandatory follow‐up visit at 28 days, 3 months and 6 months (if the patient was unable to reach the clinical centre, the follow‐up visit was replaced by a telephone call).
+
+Heart failure was defined according to the European Society of Cardiology (ESC) criteria: - The presence of symptoms and/or signs of heart failure. Typical symptoms include breathlessness, orthopnea, paroxysmal nocturnal dyspnea, reduced excises tolerance, Fatigue, tiredness, increased time to recover after exercise and Ankle swelling. Typical signs include elevated jugular venous pressure, hepatojugular reflux, third heart sound (gallop rhythm) and laterally displaced apical impulse. - Elevated levels of BNPs (BNP \>35 pg/mL and/or NT‐proBNP \>125 pg/mL) - Objective evidence of other cardiac functional and structural alterations underlying heart failure. - In case of uncertainty, a stress test or invasively measured elevated LV filling pressure may be needed to confirm the diagnosis.
+
+```{r library}
+library(readr)
+library(janitor)
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggridges)
+library(tidyr)
+library(patchwork)
+library(shiny)
+
+```
+
+```{r load data}
+# Load the data6
+dataset <- readr::read_csv("../zigong/dat.csv")
+dataset_md <- readr::read_csv("../zigong/dat_md.csv")
+data_dictionary <- readr::read_csv("../zigong/dataDictionary.csv")
+
+```
+
+```{r data clean}
+# Clean column names
+dataset_cn <- dataset %>% janitor::clean_names()
+
+# Retrieve the full column specification
+#spec(dataset_cn)
+
+# Get labels of age_cat
+unique(dataset_cn$age_cat) # match the number of unique intervals in mutate() with the correct number of labels
+
+# Convert relevant columns to factors
+dataset_cf <- dataset_cn %>%
+  mutate(
+    gender = as.factor(gender),
+    destination_discharge = as.factor(destination_discharge),
+    admission_ward = as.factor(admission_ward),
+    admission_way = as.factor(admission_way),
+    occupation = as.factor(occupation),
+    discharge_department = as.factor(discharge_department),
+    type_of_heart_failure = as.factor(type_of_heart_failure),
+    nyha_cardiac_function_classification = as.factor(nyha_cardiac_function_classification),
+    killip_grade = as.factor(killip_grade),
+    type_ii_respiratory_failure = as.factor(type_ii_respiratory_failure),
+    consciousness = as.factor(consciousness),
+    respiratory_support = as.factor(respiratory_support),
+    oxygen_inhalation = as.factor(oxygen_inhalation),
+    outcome_during_hospitalization = as.factor(outcome_during_hospitalization),
+    age_cat = factor(age_cat, labels = c("21-29", "29-39", "39-49", "49-59", "59-69", "69-79", "79-89", "89-110"))
+  )
+
+# Display structure to verify changes
+#str(dataset_cf) # Check until no chr; if has chr added into mutate()
+```
+
+```{r Filter, echo=FALSE, results="hide"}
+# Filter dataset to remove unrealistic height and weight values
+dataset_cleaned <- dataset_cf %>%
+  filter(weight >= 30 & weight < 200, height >= 1.2 & height < 2.2)
+
+# Filter out age groups 21-29 and 29-39 as low sample size makes clutter
+age_filtered_dataset <- dataset_cleaned %>%
+  filter(!age_cat %in% c("21-29", "29-39"))
+
+# Convert all columns to character type for missing data check
+dataset_for_missing <- dataset_cleaned %>%
+  mutate(across(everything(), as.character))
+
+# Identify and count missing data in the cleaned dataset
+missing_data_summary <- dataset_for_missing %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value") %>%
+  filter(is.na(Value)) %>%
+  group_by(Variable) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count))
+
+# Display the summary of missing data
+if (nrow(missing_data_summary) == 0) {
+  cat("There is no missing data in the dataset.")
+} else {
+  kable(missing_data_summary, col.names = c("Variable", "Number of Missing Values"), caption = "Summary of Missing Data")
+}
+```
+
+```{r BMI chcek, echo=FALSE, results="hide"}
+# Calculate BMI from weight and height
+dataset_cleaned <- dataset_cleaned %>%
+  mutate(calculated_bmi = weight / (height * height))
+
+# Compare calculated BMI with provided BMI
+bmi_comparison <- dataset_cleaned %>%
+  mutate(bmi_difference = abs(bmi - calculated_bmi))
+
+# Display rows with significant discrepancies
+significant_discrepancies <- bmi_comparison %>%
+  filter(bmi_difference > 0.1)  # You can adjust the threshold as needed
+
+# Print significant discrepancies
+print(significant_discrepancies)
+
+# Summary statistics of BMI differences
+summary(bmi_comparison$bmi_difference)
+
+```
+
+```{r shiny_1}
+ui1 <- fluidPage(
+  titlePanel("Distribution of Heart Failure Types by Gender"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("gender", "Select Gender:",
+                  choices = c("All", "Female", "Male"), selected = "All")
+    ),
+    mainPanel(
+      plotOutput("barPlot")
+    )
+  )
+)
+
+server1 <- function(input, output) {
+  output$barPlot <- renderPlot({
+    data <- dataset_cleaned
+    if (input$gender != "All") {
+      data <- data[data$gender == input$gender, ]
+    }
+    
+    ggplot(data, aes(x = type_of_heart_failure, fill = gender)) +
+      geom_bar() +
+      labs(title = "Distribution of Heart Failure Types by Gender", 
+           x = "Type of Heart Failure", 
+           y = "Count", 
+           fill = "Gender") +
+      scale_fill_manual(values = c("Female" = "pink", "Male" = "lightblue")) +
+      theme_minimal()
+  })
+}
+
+shinyApp(ui1, server1)
+```
+
+
+```{r shiny_2}
+ui2 <- fluidPage(
+  titlePanel("LVEF by Type of Heart Failure and Gender"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("gender", "Select Gender:",
+                  choices = c("All", "Female", "Male"), selected = "All"),
+      checkboxGroupInput("age_group2", "Select Age Groups",
+                         choices = c("21-29", "29-39", "39-49", "49-59", "59-69", "69-79", "79-89", "89-110"),
+                         selected = c("39-49", "49-59", "59-69", "69-79"))
+    ),
+    mainPanel(
+      plotOutput("scatterPlot")
+    )
+  )
+)
+
+server2 <- function(input, output) {
+  output$scatterPlot <- renderPlot({
+    data <- dataset_cleaned
+    if (input$gender != "All") {
+      data <- data[data$gender == input$gender, ]
+    }
+    if (!is.null(input$age_group2)) {
+      data <- data[data$age_cat %in% input$age_group2, ]
+    }
+    
+    ggplot(data, aes(x = type_of_heart_failure, y = lvef, color = gender)) +
+      geom_jitter(width = 0.2, height = 0) +
+      geom_hline(yintercept = 40, linetype = "dashed", color = "#B76776") +
+      geom_hline(yintercept = 50, linetype = "dashed", color = "#B76776") +
+      labs(title = "LVEF by Type of Heart Failure and Gender", 
+           x = "Type of Heart Failure", 
+           y = "LVEF (%)", 
+           color = "Gender") +
+      annotate("text", x = 3.4, y = 33, label = "HFrEF", color = "#403E4E", vjust = -1) +
+      annotate("text", x = 3.4, y = 43, label = "HFmrEF", color = "#403E4E", vjust = -1) +
+      annotate("text", x = 3.4, y = 53, label = "HFpEF", color = "#403E4E", vjust = -1) +
+      theme_minimal()
+  })
+}
+
+shinyApp(ui2, server2)
+
+```
+
+```{r shiny_3}
+ui3 <- fluidPage(
+  titlePanel("Blood Pressure Distribution by Gender within Selected Age Range"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("gender", "Select Gender:",
+                  choices = c("All", "Female", "Male"), selected = "All"),
+      sliderInput("age_range", "Select Age Range",
+                  min = 21, max = 110, value = c(30, 80), step = 1)
+    ),
+    mainPanel(
+      plotOutput("densityPlot")
+    )
+  )
+)
+
+server3 <- function(input, output) {
+  output$densityPlot <- renderPlot({
+    data <- dataset_cleaned
+    if (input$gender != "All") {
+      data <- data[data$gender == input$gender, ]
+    }
+    data <- data %>%
+      filter(between(as.numeric(sub(".*-", "", age_cat)), input$age_range[1], input$age_range[2]))
+    
+    long_dataset_bp <- data %>%
+      pivot_longer(cols = c(systolic_blood_pressure, diastolic_blood_pressure, map), 
+                   names_to = "blood_pressure_type", values_to = "value")
+    
+    ggplot(long_dataset_bp, aes(x = value, color = blood_pressure_type, linetype = gender)) +
+      geom_density(aes(group = interaction(blood_pressure_type, gender)), adjust = 1.5) +
+      labs(title = "Blood Pressure Distribution by Gender within Selected Age Range", 
+           x = "Blood Pressure (mmHg)", 
+           y = "Density", 
+           color = "Blood Pressure Type", 
+           linetype = "Gender") +
+      scale_color_manual(values = c("systolic_blood_pressure" = "#B76776", 
+                                    "diastolic_blood_pressure" = "#2F76C0", 
+                                    "map" = "#7F807F"),
+                         labels = c("systolic_blood_pressure" = "Systolic Blood Pressure", 
+                                    "diastolic_blood_pressure" = "Diastolic Blood Pressure", 
+                                    "map" = "Mean Arterial Pressure")) +
+      scale_linetype_manual(values = c("Female" = "solid", "Male" = "dashed")) +
+      theme_minimal()
+  })
+}
+
+shinyApp(ui3, server3)
+
+```

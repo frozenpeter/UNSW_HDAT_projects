@@ -1,0 +1,8 @@
+Materials & Methods
+A retrospective review of 243 stroke cases from the institutional stroke database was performed — including 105 known proximal LVOs-Internal Carotid artery (ICA) and Proximal MCA (M1) occlusions — and confirmed on conventional angiography. Another cohort of 138 consecutive patients undergoing CTA in the month of Aug. 2019 were included as controls for analysis. The algorithm results for the second cohort were compared with the radiologist’s reads. 
+
+Results
+The total cohort of 243 patients included 105 patients with an LVO. The algorithm showed sensitivity of 92.3% and specificity of 94.9% for detecting M1 and ICA occlusions.
+
+Conclusions
+The automated algorithm has tremendous potential in the emergency setting as a screening tool to expedite formal diagnosis and improve workflow.

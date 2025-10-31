@@ -1,0 +1,32 @@
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/kZZmenoe)
+# HDAT9800 2024 Individual Assessment 2
+
+Please see instructions for this assessment on the HDAT9800 course web site at https://hdat9800.cbdrh.med.unsw.edu.au/individual_assessment_2.html
+
+# Marking -- Tim Churches
+
+1. Initial steps – note: you may re-use code you wrote for Individual Assessment 1 for these steps (or improved versions of it if you wish) [4 marks (out of 23) overall for all of the following initial steps].
+  a. The R Markdown document for the assignment should be named “assignment_2.Rmd” (or “assignment_2.qmd” if you wish to use Quarto, please see below). This file should be in the root of the project directory, not in a subdirectory.
+  b. The YAML information at the top of the document should specify the title of the document (choose an appropriate title, the exact wording does not matter), your name as the author of the document, and the approximate date you completed the assignment.
+  c. The YAML information should also explicitly specify that the output format is an HTML document or as an HTML presentation (slide deck) format. You may have to consult the R Markdown (and/or Quarto) documentation on the web to determine how to do this (it is well documented).
+  d. You should include a set-up code chunk at the top of your document (after the YAML header) to load the R packages required in the document and to set defaults for your document.
+  e. Download the main Zigong data set (called dat.csv) and place it in a directory (folder) called zigong at the same level as your assessment 2 project directory, so that you can read the data into R using this code: zigong <- readr::read_csv("../zigong/dat.csv") The reason for doing this is we do not want you to commit the actual data files into your assignment git repository, so they need to be stored outside the project directory, but we also need the data file(s) to be located in a standard place so that the markers can easily re-run your code. You may add options to the read_csv() function, but please leave the path to the data file exactly as it appears above, and place your local copy of the data file accordingly. Ask your fellow students or instructors for help if required.[Marks will be deducted if the data is not read directly from the directory path given above or if the data file is committed to the assignment repository.]
+  f. A separate code chunk should then be included to clean and transform that data frame (tibble) into a form that is easier to work with. This should include, if necessary, a) renaming columns so that the names do not include any spaces or dots — use the clean_names() function in the janitor package to do this efficiently; b) converting categorical columns to factors, with appropriate labels for each factor value. The text in the categorical columns is fine to use as the value labels, you do not need to transform it further. There are not that many categorical columns. However, there is an age group column which does need better labels for each value. You can combine some of these steps with step 1.e. if you wish – that is, you might wish to set column data types at the time you read in the data (we strongly suggest that your use the read_csv() function from the readr package to do that).
+
+> 4/4 marks
+> Comments: Nice code!
+
+2. Create a set of no more than 10 slides containing charts which visualise the range and/or distribution of values in no more than 10 variables in the dataset, for the dataset overall. These variables should include age (or age group), gender, height and weight or BMI, and type of heart failure. You may choose which other variables to visualise, but at least three of them should be the numeric variables (columns). Give each chart a title, and axis labels and value legends as appropriate. You may wish to use a ggplot2 theme to make the charts look more attractive and/or readable. [8 marks]
+
+> 8/8 marks 
+> Comments: I can't fault any of these charts, all very nicely presented.
+
+3. Use “small multiples” (using ggplot2 facetting or the patchwork library of similar means) to display some interesting or significant differences between subsets of the overall patient population in the data set (in statistical parlance, contrasts). These contrasts should be created on the basis of at least one of the categorical (or logical) variables in the dataset. That is, you need to condition each chart in a set of small multiples on the value of one or more other variables in the dataset. Good choices for the conditioning variable(s) are the categorical variables. The visualisations needs to display differences (or similarities) clearly, and thus including too many subset groups and too many response (continuous) variables is likely to detract from the visualisation (and thus lose marks). You do not need to provide a comprehensive or exhaustive analysis or visualisation of every aspect or contrast in the dataset. You should include no more than five (5) slides in your slide deck containing such visualisations, but you may add slides in between them explaining each one or commenting on what they show. Include some brief explanation of the construction of your visualisation (what columns are used, what type of chart is employed, what data transformations were needed and how they were done). There is no need provide clinical explanations of why they may show what they do (in other words, you do not need to explain the medical or biological reasons behind the responses shown). Include a brief discussion of potential conceptual problems or implementation issues with your chart(s). [11 marks]
+
+> 10.75/11 marks
+> Comments: Again, a well-designed and nicely executed set of charts with really good descriptive etxt and reflection, and attention to detail in noting missing values etc. 
+
+Assessment responses which fulfil the brief as described above will be awarded at least 60% of the available marks for each task. Beyond this, additional marks will be awarded at the discretion of the markers for excellence in implementation of your solution (judged by the markers against the benchmark of your fellow students), including neatness and documentation of your code, the effectiveness and quality of your visualisations and the completeness of your explanatory text.
+
+> Total marks: 22.75/23
+> Comments: Great work!
